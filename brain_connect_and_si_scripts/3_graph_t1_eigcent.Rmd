@@ -1,0 +1,1668 @@
+---
+title: "graph_t1_eigcent"
+author: "Jackie"
+date: "5/24/2020"
+output: html_notebook
+---
+Computes AUC for eigenvector centrality (not normalized)
+
+# libraries
+```{r}
+library(tidyverse)
+library(haven)
+library(modelr)
+library(readxl)
+library(Rcpp)
+library(httpuv)
+library(shiny)
+library(plotly)
+```
+
+# reading data
+```{r}
+eig_cent_fp <- "~/Box/eig_cent.xlsx"
+eig_cent_th.1 <-
+  read_excel(eig_cent_fp, sheet = "eig_cent_.1")
+eig_cent_th.12 <-
+  read_excel(eig_cent_fp, sheet = "eig_cent_.12")
+eig_cent_th.14 <-
+  read_excel(eig_cent_fp, sheet = "eig_cent_.14")
+eig_cent_th.16 <-
+  read_excel(eig_cent_fp, sheet = "eig_cent_.16")
+eig_cent_th.18 <-
+  read_excel(eig_cent_fp, sheet = "eig_cent_.18")
+eig_cent_th.2 <-
+  read_excel(eig_cent_fp, sheet = "eig_cent_.2")
+```
+
+# Renaming
+```{r}
+eig_cent_th.1 <-
+  eig_cent_th.1 %>%
+  rename(
+    "ELS_ID" = "...1"
+  )
+eig_cent_th.12 <-
+  eig_cent_th.12 %>%
+  rename(
+    "ELS_ID" = "...1"
+  )
+eig_cent_th.14 <-
+  eig_cent_th.14 %>%
+  rename(
+    "ELS_ID" = "...1"
+  )
+eig_cent_th.16 <-
+  eig_cent_th.16 %>%
+  rename(
+    "ELS_ID" = "...1"
+  )
+eig_cent_th.18 <-
+  eig_cent_th.18 %>%
+  rename(
+    "ELS_ID" = "...1"
+  )
+eig_cent_th.2 <-
+  eig_cent_th.2 %>%
+  rename(
+    "ELS_ID" = "...1"
+  )
+```
+
+
+# Renaming subject column 
+```{r}
+
+eig_cent_th.1 <-
+  eig_cent_th.1 %>%
+  mutate(ELS_ID = 
+  str_remove(ELS_ID, 
+             "CorrMatrix_sub-"
+             )
+  ) %>%
+  mutate(ELS_ID = as.numeric(ELS_ID))
+eig_cent_th.12 <-
+  eig_cent_th.12 %>%
+  mutate(ELS_ID = 
+  str_remove(ELS_ID, 
+             "CorrMatrix_sub-"
+             )
+  ) %>%
+  mutate(ELS_ID = as.numeric(ELS_ID))
+eig_cent_th.14 <-
+  eig_cent_th.14 %>%
+  mutate(ELS_ID = 
+  str_remove(ELS_ID, 
+             "CorrMatrix_sub-"
+             )
+  ) %>%
+  mutate(ELS_ID = as.numeric(ELS_ID))
+eig_cent_th.16 <-
+  eig_cent_th.16 %>%
+  mutate(ELS_ID = 
+  str_remove(ELS_ID, 
+             "CorrMatrix_sub-"
+             )
+  ) %>%
+  mutate(ELS_ID = as.numeric(ELS_ID))
+eig_cent_th.18 <-
+  eig_cent_th.18 %>%
+  mutate(ELS_ID = 
+  str_remove(ELS_ID, 
+             "CorrMatrix_sub-"
+             )
+  ) %>%
+  mutate(ELS_ID = as.numeric(ELS_ID))
+eig_cent_th.2 <-
+  eig_cent_th.2 %>%
+  mutate(ELS_ID = 
+  str_remove(ELS_ID, 
+             "CorrMatrix_sub-"
+             )
+  ) %>%
+  mutate(ELS_ID = as.numeric(ELS_ID))
+```
+
+
+## ID to factor
+```{r}
+
+eig_cent_th.1 <-
+  eig_cent_th.1 %>%
+  mutate(ELS_ID = as.factor(ELS_ID))
+
+eig_cent_th.12 <-
+  eig_cent_th.12 %>%
+  mutate(ELS_ID = as.factor(ELS_ID))
+
+eig_cent_th.14 <-
+  eig_cent_th.14 %>%
+  mutate(ELS_ID = as.factor(ELS_ID))
+
+eig_cent_th.16 <-
+  eig_cent_th.16 %>%
+  mutate(ELS_ID = as.factor(ELS_ID))
+
+eig_cent_th.18 <-
+  eig_cent_th.18 %>%
+  mutate(ELS_ID = as.factor(ELS_ID))
+
+eig_cent_th.2 <-
+  eig_cent_th.2 %>%
+  mutate(ELS_ID = as.factor(ELS_ID))
+```
+
+# appending threshold values to each roi
+```{r}
+eig_cent_th.1 <-
+  eig_cent_th.1 %>%
+  rename_at(
+    vars(-ELS_ID),
+    function(x)
+      paste0(x, "_.10")
+    )
+
+eig_cent_th.12 <-
+  eig_cent_th.12 %>%
+  rename_at(
+    vars(-ELS_ID),
+    function(x)
+      paste0(x, "_.12")
+    )
+
+eig_cent_th.14 <-
+  eig_cent_th.14 %>%
+  rename_at(
+    vars(-ELS_ID),
+    function(x)
+      paste0(x, "_.14")
+    )
+
+eig_cent_th.16 <-
+  eig_cent_th.16 %>%
+  rename_at(
+    vars(-ELS_ID),
+    function(x)
+      paste0(x, "_.16")
+    )
+
+eig_cent_th.18 <-
+  eig_cent_th.18 %>%
+  rename_at(
+    vars(-ELS_ID),
+    function(x)
+      paste0(x, "_.18")
+    )
+
+eig_cent_th.2 <-
+  eig_cent_th.2 %>%
+  rename_at(
+    vars(-ELS_ID),
+    function(x)
+      paste0(x, "_.20")
+    )
+```
+
+# merging files
+```{r}
+eig_cent_all_thr <-
+  left_join(eig_cent_th.1,
+            eig_cent_th.12,
+            by = "ELS_ID")
+eig_cent_all_thr <-
+  left_join(eig_cent_all_thr,
+            eig_cent_th.14,
+            by = "ELS_ID")
+eig_cent_all_thr <-
+  left_join(eig_cent_all_thr,
+            eig_cent_th.16,
+            by = "ELS_ID")
+eig_cent_all_thr <-
+  left_join(eig_cent_all_thr,
+            eig_cent_th.18,
+            by = "ELS_ID") %>%
+  mutate(ELS_ID = factor(ELS_ID))
+eig_cent_all_thr <-
+  left_join(eig_cent_all_thr,
+            eig_cent_th.2,
+            by = "ELS_ID")
+```
+
+# now do the gathering and spreading
+```{r long then wide}
+# gather
+eig_cent_all_thr_long <- 
+  eig_cent_all_thr %>%
+  group_by(ELS_ID) %>%
+  gather(roi, eig_cent_value, 
+         SFG_L_1_.10:lPFtha_R_252_.20) %>%
+  separate(col = roi, c("roi", "thresh"), "[.]")
+# spread
+eig_cent_all_thr_wide <-
+  eig_cent_all_thr_long %>%
+  spread(thresh, eig_cent_value)  %>%
+  mutate(roi = 
+           str_sub(roi, 1, str_length(roi)-1)
+  )
+  
+```
+
+# viz
+```{r}
+# hist_theme
+dist_plot <-
+  theme_minimal() +
+  theme(
+    axis.text = element_text(size = 10),
+    axis.title = element_text(size = 12)
+  )
+dist_facet <-
+  theme_minimal() +
+  theme(
+    strip.text = element_text(size = 8),
+    axis.text.x = element_text(size = 8, angle = 60, hjust = 1),
+    axis.text.y = element_text(size = 8),
+    axis.title = element_text(size = 12)
+  )
+dist_x_labels <-
+  theme(
+    axis.text.x = element_text(angle = 90,
+                               size = 4)
+  )
+```
+
+
+```{r dist eig_cent w thresh}
+# eig_cent by threshold
+dist_eig_cent_by_thresh <- 
+  eig_cent_all_thr_long %>%
+  mutate(
+    thresh = as.factor(thresh)
+  ) %>%
+  ggplot(.,
+         aes(x=roi, y=eig_cent_value)
+         ) +
+  geom_col(alpha = .5, position = "dodge") +
+  scale_y_continuous(
+    label = function(x) format(x, big.mark = ".", decimal.mark = ",")) +
+  dist_plot +
+  facet_wrap(~thresh,
+             ncol = 2,
+             nrow = 4) +
+  dist_facet +
+    dist_x_labels
+dist_eig_cent_by_thresh
+```
+
+# area under curve
+
+```{r}
+thresh1 <- .10
+thresh2 <- .12
+thresh3 <- .14
+thresh4 <- .16
+thresh5 <- .18
+thresh6 <- .20
+eig_cent_all_thr_wide <-
+  eig_cent_all_thr_wide %>%
+    rename(.,
+           "th.1" = `10`,
+           "th.12" = `12`,
+           "th.14" = `14`,
+           "th.16" = `16`,
+           "th.18" = `18`,
+           "th.20" = `20`) %>%
+  mutate(
+    th1toth2 =
+      thresh2 - thresh1,
+    th2toth3 =
+      thresh3 - thresh2,
+    th3toth4 =
+      thresh4 - thresh3,
+    th4toth5 =
+      thresh5 - thresh4,
+    th5toth6 =
+      thresh6 - thresh5
+  )
+```
+
+Separating ROIs 
+options(scipen=999) # turn of sci notation in R
+### separating rois
+```{r separating rois}
+amyg <- 
+  eig_cent_all_thr_wide %>%
+  mutate(
+    roi = as.factor(roi)
+  ) %>%
+  filter(
+    str_detect(roi, "Amyg")
+  )
+vca <- 
+  eig_cent_all_thr_wide %>%
+  mutate(
+    roi = as.factor(roi)
+  ) %>%
+  filter(
+    str_detect(roi, "vC")
+  )
+gpe <- 
+  eig_cent_all_thr_wide %>%
+  mutate(
+    roi = as.factor(roi)
+  ) %>%
+  filter(
+    str_detect(roi, "Gpe")
+  )
+gpi <- 
+  eig_cent_all_thr_wide %>%
+  mutate(
+    roi = as.factor(roi)
+  ) %>%
+  filter(
+    str_detect(roi, "Gpi")
+  )
+vmpu <- 
+  eig_cent_all_thr_wide %>%
+  mutate(
+    roi = as.factor(roi)
+  ) %>%
+  filter(
+    str_detect(roi, "vmP")
+  )
+nac <- 
+  eig_cent_all_thr_wide %>%
+  mutate(
+    roi = as.factor(roi)
+  ) %>%
+  filter(
+    str_detect(roi, "NAC")
+  )
+dca <- 
+  eig_cent_all_thr_wide %>%
+  mutate(
+    roi = as.factor(roi)
+  ) %>%
+  filter(
+    str_detect(roi, "dC")
+  )
+dlpu <- 
+  eig_cent_all_thr_wide %>%
+  mutate(
+    roi = as.factor(roi)
+  ) %>%
+  filter(
+    str_detect(roi, "dlPu")
+  )
+cg <- 
+  eig_cent_all_thr_wide %>%
+  mutate(
+    roi = as.factor(roi)
+  ) %>%
+  filter(
+    str_detect(roi,"CG")
+  )
+fug <- 
+  eig_cent_all_thr_wide %>%
+  mutate(
+    roi = as.factor(roi)
+  ) %>%
+  filter(
+    str_detect(roi,"FuG")
+  )
+hipp <- 
+  eig_cent_all_thr_wide %>%
+  mutate(
+    roi = as.factor(roi)
+  ) %>%
+  filter(
+    str_detect(roi,"Hipp")
+  )
+ifg <- 
+  eig_cent_all_thr_wide %>%
+  mutate(
+    roi = as.factor(roi)
+  ) %>%
+  filter(
+    str_detect(roi,"IFG")
+  )
+ins <- 
+  eig_cent_all_thr_wide %>%
+  mutate(
+    roi = as.factor(roi)
+  ) %>%
+  filter(
+    str_detect(roi,"INS")
+  )
+ipl <- 
+  eig_cent_all_thr_wide %>%
+  mutate(
+    roi = as.factor(roi)
+  ) %>%
+  filter(
+    str_detect(roi,"IPL")
+  )
+itg <- 
+  eig_cent_all_thr_wide %>%
+  mutate(
+    roi = as.factor(roi)
+  ) %>%
+  filter(
+    str_detect(roi,"ITG")
+  )
+locc <- 
+  eig_cent_all_thr_wide %>%
+  mutate(
+    roi = as.factor(roi)
+  ) %>%
+  filter(
+    str_detect(roi,"LOcC")
+  )
+mfg <- 
+  eig_cent_all_thr_wide %>%
+  mutate(
+    roi = as.factor(roi)
+  ) %>%
+  filter(
+    str_detect(roi,"MFG")
+  )
+locc <- 
+  eig_cent_all_thr_wide %>%
+  mutate(
+    roi = as.factor(roi)
+  ) %>%
+  filter(
+    str_detect(roi,"LOcC")
+  )
+mtg <- 
+  eig_cent_all_thr_wide %>%
+  mutate(
+    roi = as.factor(roi)
+  ) %>%
+  filter(
+    str_detect(roi,"MTG")
+  )
+mvocc <- 
+  eig_cent_all_thr_wide %>%
+  mutate(
+    roi = as.factor(roi)
+  ) %>%
+  filter(
+    str_detect(roi,"MVocC") 
+  )
+org <- 
+  eig_cent_all_thr_wide %>%
+  mutate(
+    roi = as.factor(roi)
+  ) %>%
+  filter(
+    str_detect(roi,"OrG")
+  )
+pcl <- 
+  eig_cent_all_thr_wide %>%
+  mutate(
+    roi = as.factor(roi)
+  ) %>%
+  filter(
+    str_detect(roi,"PCL")
+  )
+pcun <- 
+  eig_cent_all_thr_wide %>%
+  mutate(
+    roi = as.factor(roi)
+  ) %>%
+  filter(
+    str_detect(roi,"Pcun")
+  )
+phg <- 
+  eig_cent_all_thr_wide %>%
+  mutate(
+    roi = as.factor(roi)
+  ) %>%
+  filter(
+    str_detect(roi,"PhG")
+  )
+pog <- 
+  eig_cent_all_thr_wide %>%
+  mutate(
+    roi = as.factor(roi)
+  ) %>%
+  filter(
+   str_detect(roi,"PoG")
+  )
+prg <- 
+  eig_cent_all_thr_wide %>%
+  mutate(
+    roi = as.factor(roi)
+  ) %>%
+  filter(
+    str_detect(roi,"PrG")
+  )
+psts <- 
+  eig_cent_all_thr_wide %>%
+  mutate(
+    roi = as.factor(roi)
+  ) %>%
+  filter(
+    str_detect(roi,"pSTS")
+  )
+sfg <- 
+  eig_cent_all_thr_wide %>%
+  mutate(
+    roi = as.factor(roi)
+  ) %>%
+  filter(
+    str_detect(roi,"SFG")
+  )
+spl <- 
+  eig_cent_all_thr_wide %>%
+  mutate(
+    roi = as.factor(roi)
+  ) %>%
+  filter(
+    str_detect(roi,"SPL")
+  )
+stg <- 
+  eig_cent_all_thr_wide %>%
+  mutate(
+    roi = as.factor(roi)
+  ) %>%
+  filter(
+    str_detect(roi,"STG")
+  )
+
+mpftha <- 
+  eig_cent_all_thr_wide %>%
+  mutate(
+    roi = as.factor(roi)
+  ) %>%
+  filter(
+    str_detect(roi,"mPFtha")
+  )
+mpmtha <- 
+  eig_cent_all_thr_wide %>%
+  mutate(
+    roi = as.factor(roi)
+  ) %>%
+  filter(
+    str_detect(roi,"mPMtha")
+  )
+
+stha <- 
+  eig_cent_all_thr_wide %>%
+  mutate(
+    roi = as.factor(roi)
+  ) %>%
+  filter(
+    str_detect(roi,"Stha")
+  )
+
+rttha <- 
+  eig_cent_all_thr_wide %>%
+  mutate(
+    roi = as.factor(roi)
+  ) %>%
+  filter(
+    str_detect(roi,"rTtha")
+  )
+
+pptha <- 
+  eig_cent_all_thr_wide %>%
+  mutate(
+    roi = as.factor(roi)
+  ) %>%
+  filter(
+    str_detect(roi,"Pp")
+  )
+
+otha <- 
+  eig_cent_all_thr_wide %>%
+  mutate(
+    roi = as.factor(roi)
+  ) %>%
+  filter(
+    str_detect(roi,"Otha")
+  )
+
+cttha <- 
+  eig_cent_all_thr_wide %>%
+  mutate(
+    roi = as.factor(roi)
+  ) %>%
+  filter(
+    str_detect(roi,"cTtha")
+  )
+
+lpftha <- 
+  eig_cent_all_thr_wide %>%
+  mutate(
+    roi = as.factor(roi)
+  ) %>%
+  filter(
+    str_detect(roi,"lPFtha")
+  )
+
+sn <- 
+  eig_cent_all_thr_wide %>%
+  mutate(
+    roi = as.factor(roi)
+  ) %>%
+  filter(
+    str_detect(roi,"SN")
+  )
+```
+
+### creating aucs
+```{r creating amyg auc}
+# amyg
+amyg_auc <-
+  amyg %>%
+  mutate(
+    amyg_auc1 = th1toth2 * ((th.1 + th.12) / 2),
+    amyg_auc2 = th2toth3 * ((th.12 + th.14) / 2),
+    amyg_auc3 = th3toth4 * ((th.14 + th.16) / 2),
+    amyg_auc4 = th4toth5 * ((th.16 + th.18) / 2),
+    amyg_auc5 = th5toth6 * ((th.18 + th.20) / 2)
+  ) %>%
+  ungroup(ELS_ID) %>%
+  mutate(ELS_ID = as.factor(ELS_ID))
+amyg_auc$amyg_S_AUCg <-rowSums(amyg_auc[, c("amyg_auc1","amyg_auc2","amyg_auc3","amyg_auc4","amyg_auc5")])
+
+# back to wide format
+amyg_auc_wide <-
+  amyg_auc %>%
+  select(ELS_ID, roi, amyg_S_AUCg) %>%
+  spread(roi, amyg_S_AUCg)
+
+```
+
+
+```{r creating CG auc}
+# CG
+cg_auc <-
+  cg %>%
+  mutate(
+    cg_auc1 = th1toth2 * ((th.1 + th.12) / 2),
+    cg_auc2 = th2toth3 * ((th.12 + th.14) / 2),
+    cg_auc3 = th3toth4 * ((th.14 + th.16) / 2),
+    cg_auc4 = th4toth5 * ((th.16 + th.18) / 2),
+    cg_auc5 = th5toth6 * ((th.18 + th.20) / 2)
+  ) %>%
+  ungroup(ELS_ID) %>%
+  mutate(ELS_ID = as.factor(ELS_ID))
+cg_auc$cg_S_AUCg <-rowSums(cg_auc[, c("cg_auc1","cg_auc2","cg_auc3","cg_auc4","cg_auc5")])
+
+# back to wide format
+cg_auc_wide <-
+  cg_auc %>%
+  select(ELS_ID, roi, cg_S_AUCg) %>%
+  spread(roi, cg_S_AUCg)
+
+```
+
+```{r creating FuG auc}
+# FuG
+fug_auc <-
+  fug %>%
+  mutate(
+    fug_auc1 = th1toth2 * ((th.1 + th.12) / 2),
+    fug_auc2 = th2toth3 * ((th.12 + th.14) / 2),
+    fug_auc3 = th3toth4 * ((th.14 + th.16) / 2),
+    fug_auc4 = th4toth5 * ((th.16 + th.18) / 2),
+    fug_auc5 = th5toth6 * ((th.18 + th.20) / 2)
+  ) %>%
+  ungroup(ELS_ID) %>%
+  mutate(ELS_ID = as.factor(ELS_ID))
+fug_auc$fug_S_AUCg <-rowSums(fug_auc[, c("fug_auc1","fug_auc2","fug_auc3","fug_auc4","fug_auc5")])
+
+# back to wide format
+fug_auc_wide <-
+  fug_auc %>%
+  select(ELS_ID, roi, fug_S_AUCg) %>%
+  spread(roi, fug_S_AUCg)
+```
+
+```{r creating Hipp auc}
+# Hipp
+hipp_auc <-
+  hipp %>%
+  mutate(
+    hipp_auc1 = th1toth2 * ((th.1 + th.12) / 2),
+    hipp_auc2 = th2toth3 * ((th.12 + th.14) / 2),
+    hipp_auc3 = th3toth4 * ((th.14 + th.16) / 2),
+    hipp_auc4 = th4toth5 * ((th.16 + th.18) / 2),
+    hipp_auc5 = th5toth6 * ((th.18 + th.20) / 2)
+  ) %>%
+  ungroup(ELS_ID) %>%
+  mutate(ELS_ID = as.factor(ELS_ID))
+hipp_auc$hipp_S_AUCg <-rowSums(hipp_auc[, c("hipp_auc1","hipp_auc2","hipp_auc3","hipp_auc4","hipp_auc5")])
+
+# back to wide format
+hipp_auc_wide <-
+  hipp_auc %>%
+  select(ELS_ID, roi, hipp_S_AUCg) %>%
+  spread(roi, hipp_S_AUCg)
+```
+
+```{r creating IFG auc}
+# IFG
+ifg_auc <-
+  ifg %>%
+  mutate(
+    ifg_auc1 = th1toth2 * ((th.1 + th.12) / 2),
+    ifg_auc2 = th2toth3 * ((th.12 + th.14) / 2),
+    ifg_auc3 = th3toth4 * ((th.14 + th.16) / 2),
+    ifg_auc4 = th4toth5 * ((th.16 + th.18) / 2),
+    ifg_auc5 = th5toth6 * ((th.18 + th.20) / 2)
+  ) %>%
+  ungroup(ELS_ID) %>%
+  mutate(ELS_ID = as.factor(ELS_ID))
+ifg_auc$ifg_S_AUCg <-rowSums(ifg_auc[, c("ifg_auc1","ifg_auc2","ifg_auc3","ifg_auc4","ifg_auc5")])
+
+# back to wide format
+ifg_auc_wide <-
+  ifg_auc %>%
+  select(ELS_ID, roi, ifg_S_AUCg) %>%
+  spread(roi, ifg_S_AUCg)
+```
+
+```{r creating INS auc}
+# INS
+ins_auc <-
+  ins %>%
+  mutate(
+    ins_auc1 = th1toth2 * ((th.1 + th.12) / 2),
+    ins_auc2 = th2toth3 * ((th.12 + th.14) / 2),
+    ins_auc3 = th3toth4 * ((th.14 + th.16) / 2),
+    ins_auc4 = th4toth5 * ((th.16 + th.18) / 2),
+    ins_auc5 = th5toth6 * ((th.18 + th.20) / 2)
+  ) %>%
+  ungroup(ELS_ID) %>%
+  mutate(ELS_ID = as.factor(ELS_ID))
+ins_auc$ins_S_AUCg <-rowSums(ins_auc[, c("ins_auc1","ins_auc2","ins_auc3","ins_auc4","ins_auc5")])
+
+# back to wide format
+ins_auc_wide <-
+  ins_auc %>%
+  select(ELS_ID, roi, ins_S_AUCg) %>%
+  spread(roi, ins_S_AUCg)
+```
+
+```{r creating IPL auc}
+# IPL
+ipl_auc <-
+  ipl %>%
+  mutate(
+    ipl_auc1 = th1toth2 * ((th.1 + th.12) / 2),
+    ipl_auc2 = th2toth3 * ((th.12 + th.14) / 2),
+    ipl_auc3 = th3toth4 * ((th.14 + th.16) / 2),
+    ipl_auc4 = th4toth5 * ((th.16 + th.18) / 2),
+    ipl_auc5 = th5toth6 * ((th.18 + th.20) / 2)
+  ) %>%
+  ungroup(ELS_ID) %>%
+  mutate(ELS_ID = as.factor(ELS_ID))
+ipl_auc$ipl_S_AUCg <-rowSums(ipl_auc[, c("ipl_auc1","ipl_auc2","ipl_auc3","ipl_auc4","ipl_auc5")])
+
+# back to wide format
+ipl_auc_wide <-
+  ipl_auc %>%
+  select(ELS_ID, roi, ipl_S_AUCg) %>%
+  spread(roi, ipl_S_AUCg)
+```
+
+```{r creating ITG auc}
+# ITG
+itg_auc <-
+  itg %>%
+  mutate(
+    itg_auc1 = th1toth2 * ((th.1 + th.12) / 2),
+    itg_auc2 = th2toth3 * ((th.12 + th.14) / 2),
+    itg_auc3 = th3toth4 * ((th.14 + th.16) / 2),
+    itg_auc4 = th4toth5 * ((th.16 + th.18) / 2),
+    itg_auc5 = th5toth6 * ((th.18 + th.20) / 2)
+  ) %>%
+  ungroup(ELS_ID) %>%
+  mutate(ELS_ID = as.factor(ELS_ID))
+itg_auc$itg_S_AUCg <-rowSums(itg_auc[, c("itg_auc1","itg_auc2","itg_auc3","itg_auc4","itg_auc5")])
+
+# back to wide format
+itg_auc_wide <-
+  itg_auc %>%
+  select(ELS_ID, roi, itg_S_AUCg) %>%
+  spread(roi, itg_S_AUCg)
+```
+
+```{r creating LOcC auc}
+# LOcC
+locc_auc <-
+  locc %>%
+  mutate(
+    locc_auc1 = th1toth2 * ((th.1 + th.12) / 2),
+    locc_auc2 = th2toth3 * ((th.12 + th.14) / 2),
+    locc_auc3 = th3toth4 * ((th.14 + th.16) / 2),
+    locc_auc4 = th4toth5 * ((th.16 + th.18) / 2),
+    locc_auc5 = th5toth6 * ((th.18 + th.20) / 2)
+  ) %>%
+  ungroup(ELS_ID) %>%
+  mutate(ELS_ID = as.factor(ELS_ID))
+locc_auc$locc_S_AUCg <-rowSums(locc_auc[, c("locc_auc1","locc_auc2","locc_auc3","locc_auc4","locc_auc5")])
+
+# back to wide format
+locc_auc_wide <-
+  locc_auc %>%
+  select(ELS_ID, roi, locc_S_AUCg) %>%
+  spread(roi, locc_S_AUCg)
+```
+
+
+```{r creating MFG auc}
+# MFG
+mfg_auc <-
+  mfg %>%
+  mutate(
+    mfg_auc1 = th1toth2 * ((th.1 + th.12) / 2),
+    mfg_auc2 = th2toth3 * ((th.12 + th.14) / 2),
+    mfg_auc3 = th3toth4 * ((th.14 + th.16) / 2),
+    mfg_auc4 = th4toth5 * ((th.16 + th.18) / 2),
+    mfg_auc5 = th5toth6 * ((th.18 + th.20) / 2)
+  ) %>%
+  ungroup(ELS_ID) %>%
+  mutate(ELS_ID = as.factor(ELS_ID))
+mfg_auc$mfg_S_AUCg <-rowSums(mfg_auc[, c("mfg_auc1","mfg_auc2","mfg_auc3","mfg_auc4","mfg_auc5")])
+
+# back to wide format
+mfg_auc_wide <-
+  mfg_auc %>%
+  select(ELS_ID, roi, mfg_S_AUCg) %>%
+  spread(roi, mfg_S_AUCg)
+```
+
+```{r creating MTG auc}
+# MTG
+mtg_auc <-
+  mtg %>%
+  mutate(
+    mtg_auc1 = th1toth2 * ((th.1 + th.12) / 2),
+    mtg_auc2 = th2toth3 * ((th.12 + th.14) / 2),
+    mtg_auc3 = th3toth4 * ((th.14 + th.16) / 2),
+    mtg_auc4 = th4toth5 * ((th.16 + th.18) / 2),
+    mtg_auc5 = th5toth6 * ((th.18 + th.20) / 2)
+  ) %>%
+  ungroup(ELS_ID) %>%
+  mutate(ELS_ID = as.factor(ELS_ID))
+mtg_auc$mtg_S_AUCg <-rowSums(mtg_auc[, c("mtg_auc1","mtg_auc2","mtg_auc3","mtg_auc4","mtg_auc5")])
+
+# back to wide format
+mtg_auc_wide <-
+  mtg_auc %>%
+  select(ELS_ID, roi, mtg_S_AUCg) %>%
+  spread(roi, mtg_S_AUCg)
+```
+
+
+```{r creating MVocC auc}
+# MVocC
+mvocc_auc <-
+  mvocc %>%
+  mutate(
+    mvocc_auc1 = th1toth2 * ((th.1 + th.12) / 2),
+    mvocc_auc2 = th2toth3 * ((th.12 + th.14) / 2),
+    mvocc_auc3 = th3toth4 * ((th.14 + th.16) / 2),
+    mvocc_auc4 = th4toth5 * ((th.16 + th.18) / 2),
+    mvocc_auc5 = th5toth6 * ((th.18 + th.20) / 2)
+  ) %>%
+  ungroup(ELS_ID) %>%
+  mutate(ELS_ID = as.factor(ELS_ID))
+mvocc_auc$mvocc_S_AUCg <-rowSums(mvocc_auc[, c("mvocc_auc1","mvocc_auc2","mvocc_auc3","mvocc_auc4","mvocc_auc5")])
+
+# back to wide format
+mvocc_auc_wide <-
+  mvocc_auc %>%
+  select(ELS_ID, roi, mvocc_S_AUCg) %>%
+  spread(roi, mvocc_S_AUCg)
+```
+
+```{r creating OrG auc}
+# OrG
+org_auc <-
+  org %>%
+  mutate(
+    org_auc1 = th1toth2 * ((th.1 + th.12) / 2),
+    org_auc2 = th2toth3 * ((th.12 + th.14) / 2),
+    org_auc3 = th3toth4 * ((th.14 + th.16) / 2),
+    org_auc4 = th4toth5 * ((th.16 + th.18) / 2),
+    org_auc5 = th5toth6 * ((th.18 + th.20) / 2)
+  ) %>%
+  ungroup(ELS_ID) %>%
+  mutate(ELS_ID = as.factor(ELS_ID))
+org_auc$org_S_AUCg <-rowSums(org_auc[, c("org_auc1","org_auc2","org_auc3","org_auc4","org_auc5")])
+
+# back to wide format
+org_auc_wide <-
+  org_auc %>%
+  select(ELS_ID, roi, org_S_AUCg) %>%
+  spread(roi, org_S_AUCg)
+```
+
+```{r creating PCL auc}
+# PCL
+pcl_auc <-
+  pcl %>%
+  mutate(
+    pcl_auc1 = th1toth2 * ((th.1 + th.12) / 2),
+    pcl_auc2 = th2toth3 * ((th.12 + th.14) / 2),
+    pcl_auc3 = th3toth4 * ((th.14 + th.16) / 2),
+    pcl_auc4 = th4toth5 * ((th.16 + th.18) / 2),
+    pcl_auc5 = th5toth6 * ((th.18 + th.20) / 2)
+  ) %>%
+  ungroup(ELS_ID) %>%
+  mutate(ELS_ID = as.factor(ELS_ID))
+pcl_auc$pcl_S_AUCg <-rowSums(pcl_auc[, c("pcl_auc1","pcl_auc2","pcl_auc3","pcl_auc4","pcl_auc5")])
+
+# back to wide format
+pcl_auc_wide <-
+  pcl_auc %>%
+  select(ELS_ID, roi, pcl_S_AUCg) %>%
+  spread(roi, pcl_S_AUCg)
+```
+
+```{r creating Pcun auc}
+# Pcun
+pcun_auc <-
+  pcun %>%
+  mutate(
+    pcun_auc1 = th1toth2 * ((th.1 + th.12) / 2),
+    pcun_auc2 = th2toth3 * ((th.12 + th.14) / 2),
+    pcun_auc3 = th3toth4 * ((th.14 + th.16) / 2),
+    pcun_auc4 = th4toth5 * ((th.16 + th.18) / 2),
+    pcun_auc5 = th5toth6 * ((th.18 + th.20) / 2)
+  ) %>%
+  ungroup(ELS_ID) %>%
+  mutate(ELS_ID = as.factor(ELS_ID))
+pcun_auc$pcun_S_AUCg <-rowSums(pcun_auc[, c("pcun_auc1","pcun_auc2","pcun_auc3","pcun_auc4","pcun_auc5")])
+
+# back to wide format
+pcun_auc_wide <-
+  pcun_auc %>%
+  select(ELS_ID, roi, pcun_S_AUCg) %>%
+  spread(roi, pcun_S_AUCg)
+```
+
+```{r creating PhG auc}
+# PhG
+phg_auc <-
+  phg %>%
+  mutate(
+    phg_auc1 = th1toth2 * ((th.1 + th.12) / 2),
+    phg_auc2 = th2toth3 * ((th.12 + th.14) / 2),
+    phg_auc3 = th3toth4 * ((th.14 + th.16) / 2),
+    phg_auc4 = th4toth5 * ((th.16 + th.18) / 2),
+    phg_auc5 = th5toth6 * ((th.18 + th.20) / 2)
+  ) %>%
+  ungroup(ELS_ID) %>%
+  mutate(ELS_ID = as.factor(ELS_ID))
+phg_auc$phg_S_AUCg <-rowSums(phg_auc[, c("phg_auc1","phg_auc2","phg_auc3","phg_auc4","phg_auc5")])
+
+# back to wide format
+phg_auc_wide <-
+  phg_auc %>%
+  select(ELS_ID, roi, phg_S_AUCg) %>%
+  spread(roi, phg_S_AUCg)
+```
+
+```{r creating PoG auc}
+# PoG
+pog_auc <-
+  pog %>%
+  mutate(
+    pog_auc1 = th1toth2 * ((th.1 + th.12) / 2),
+    pog_auc2 = th2toth3 * ((th.12 + th.14) / 2),
+    pog_auc3 = th3toth4 * ((th.14 + th.16) / 2),
+    pog_auc4 = th4toth5 * ((th.16 + th.18) / 2),
+    pog_auc5 = th5toth6 * ((th.18 + th.20) / 2)
+  ) %>%
+  ungroup(ELS_ID) %>%
+  mutate(ELS_ID = as.factor(ELS_ID))
+pog_auc$pog_S_AUCg <-rowSums(pog_auc[, c("pog_auc1","pog_auc2","pog_auc3","pog_auc4","pog_auc5")])
+
+# back to wide format
+pog_auc_wide <-
+  pog_auc %>%
+  select(ELS_ID, roi, pog_S_AUCg) %>%
+  spread(roi, pog_S_AUCg)
+```
+
+```{r creating PrG auc}
+# PrG
+prg_auc <-
+  prg %>%
+  mutate(
+    prg_auc1 = th1toth2 * ((th.1 + th.12) / 2),
+    prg_auc2 = th2toth3 * ((th.12 + th.14) / 2),
+    prg_auc3 = th3toth4 * ((th.14 + th.16) / 2),
+    prg_auc4 = th4toth5 * ((th.16 + th.18) / 2),
+    prg_auc5 = th5toth6 * ((th.18 + th.20) / 2)
+  ) %>%
+  ungroup(ELS_ID) %>%
+  mutate(ELS_ID = as.factor(ELS_ID))
+prg_auc$prg_S_AUCg <-rowSums(prg_auc[, c("prg_auc1","prg_auc2","prg_auc3","prg_auc4","prg_auc5")])
+
+# back to wide format
+prg_auc_wide <-
+  prg_auc %>%
+  select(ELS_ID, roi, prg_S_AUCg) %>%
+  spread(roi, prg_S_AUCg)
+```
+
+```{r creating pSTS auc}
+# pSTS
+psts_auc <-
+  psts %>%
+  mutate(
+    psts_auc1 = th1toth2 * ((th.1 + th.12) / 2),
+    psts_auc2 = th2toth3 * ((th.12 + th.14) / 2),
+    psts_auc3 = th3toth4 * ((th.14 + th.16) / 2),
+    psts_auc4 = th4toth5 * ((th.16 + th.18) / 2),
+    psts_auc5 = th5toth6 * ((th.18 + th.20) / 2)
+  ) %>%
+  ungroup(ELS_ID) %>%
+  mutate(ELS_ID = as.factor(ELS_ID))
+psts_auc$psts_S_AUCg <-rowSums(psts_auc[, c("psts_auc1","psts_auc2","psts_auc3","psts_auc4","psts_auc5")])
+
+# back to wide format
+psts_auc_wide <-
+  psts_auc %>%
+  select(ELS_ID, roi, psts_S_AUCg) %>%
+  spread(roi, psts_S_AUCg)
+```
+
+```{r creating SFG auc}
+# SFG
+sfg_auc <-
+  sfg %>%
+  mutate(
+    sfg_auc1 = th1toth2 * ((th.1 + th.12) / 2),
+    sfg_auc2 = th2toth3 * ((th.12 + th.14) / 2),
+    sfg_auc3 = th3toth4 * ((th.14 + th.16) / 2),
+    sfg_auc4 = th4toth5 * ((th.16 + th.18) / 2),
+    sfg_auc5 = th5toth6 * ((th.18 + th.20) / 2)
+  ) %>%
+  ungroup(ELS_ID) %>%
+  mutate(ELS_ID = as.factor(ELS_ID))
+sfg_auc$sfg_S_AUCg <-rowSums(sfg_auc[, c("sfg_auc1","sfg_auc2","sfg_auc3","sfg_auc4","sfg_auc5")])
+
+# back to wide format
+sfg_auc_wide <-
+  sfg_auc %>%
+  select(ELS_ID, roi, sfg_S_AUCg) %>%
+  spread(roi, sfg_S_AUCg)
+```
+
+```{r creating SPL auc}
+# SPL
+spl_auc <-
+  spl %>%
+  mutate(
+    spl_auc1 = th1toth2 * ((th.1 + th.12) / 2),
+    spl_auc2 = th2toth3 * ((th.12 + th.14) / 2),
+    spl_auc3 = th3toth4 * ((th.14 + th.16) / 2),
+    spl_auc4 = th4toth5 * ((th.16 + th.18) / 2),
+    spl_auc5 = th5toth6 * ((th.18 + th.20) / 2)
+  ) %>%
+  ungroup(ELS_ID) %>%
+  mutate(ELS_ID = as.factor(ELS_ID))
+spl_auc$spl_S_AUCg <-rowSums(spl_auc[, c("spl_auc1","spl_auc2","spl_auc3","spl_auc4","spl_auc5")])
+
+# back to wide format
+spl_auc_wide <-
+  spl_auc %>%
+  select(ELS_ID, roi, spl_S_AUCg) %>%
+  spread(roi, spl_S_AUCg)
+```
+
+```{r creating STG auc}
+# STG
+stg_auc <-
+  stg %>%
+  mutate(
+    stg_auc1 = th1toth2 * ((th.1 + th.12) / 2),
+    stg_auc2 = th2toth3 * ((th.12 + th.14) / 2),
+    stg_auc3 = th3toth4 * ((th.14 + th.16) / 2),
+    stg_auc4 = th4toth5 * ((th.16 + th.18) / 2),
+    stg_auc5 = th5toth6 * ((th.18 + th.20) / 2)
+  ) %>%
+  ungroup(ELS_ID) %>%
+  mutate(ELS_ID = as.factor(ELS_ID))
+stg_auc$stg_S_AUCg <-rowSums(stg_auc[, c("stg_auc1","stg_auc2","stg_auc3","stg_auc4","stg_auc5")])
+
+# back to wide format
+stg_auc_wide <-
+  stg_auc %>%
+  select(ELS_ID, roi, stg_S_AUCg) %>%
+  spread(roi, stg_S_AUCg)
+```
+
+```{r creating CTtha}
+# CTtha
+cttha_auc <-
+  cttha %>%
+  mutate(
+    cttha_auc1 = th1toth2 * ((th.1 + th.12) / 2),
+    cttha_auc2 = th2toth3 * ((th.12 + th.14) / 2),
+    cttha_auc3 = th3toth4 * ((th.14 + th.16) / 2),
+    cttha_auc4 = th4toth5 * ((th.16 + th.18) / 2),
+    cttha_auc5 = th5toth6 * ((th.18 + th.20) / 2)
+  ) %>%
+  ungroup(ELS_ID) %>%
+  mutate(ELS_ID = as.factor(ELS_ID))
+cttha_auc$cttha_S_AUCg <-rowSums(cttha_auc[, c("cttha_auc1","cttha_auc2","cttha_auc3","cttha_auc4","cttha_auc5")])  
+
+# back to wide format
+cttha_auc_wide <-
+  cttha_auc %>%
+  select(ELS_ID, roi, cttha_S_AUCg) %>%
+  spread(roi, cttha_S_AUCg)
+```
+
+```{r dCa}
+# dCa
+dca_auc <-
+  dca %>%
+  mutate(
+    dca_auc1 = th1toth2 * ((th.1 + th.12) / 2),
+    dca_auc2 = th2toth3 * ((th.12 + th.14) / 2),
+    dca_auc3 = th3toth4 * ((th.14 + th.16) / 2),
+    dca_auc4 = th4toth5 * ((th.16 + th.18) / 2),
+    dca_auc5 = th5toth6 * ((th.18 + th.20) / 2)
+  ) %>%
+  ungroup(ELS_ID) %>%
+  mutate(ELS_ID = as.factor(ELS_ID))
+dca_auc$dca_S_AUCg <-rowSums(dca_auc[, c("dca_auc1","dca_auc2","dca_auc3","dca_auc4","dca_auc5")])  
+
+# back to wide format
+dca_auc_wide <-
+  dca_auc %>%
+  select(ELS_ID, roi, dca_S_AUCg) %>%
+  spread(roi, dca_S_AUCg)
+```
+
+```{r dlPu}
+# dlPu
+
+dlpu_auc <-
+  dlpu %>%
+  mutate(
+    dlpu_auc1 = th1toth2 * ((th.1 + th.12) / 2),
+    dlpu_auc2 = th2toth3 * ((th.12 + th.14) / 2),
+    dlpu_auc3 = th3toth4 * ((th.14 + th.16) / 2),
+    dlpu_auc4 = th4toth5 * ((th.16 + th.18) / 2),
+    dlpu_auc5 = th5toth6 * ((th.18 + th.20) / 2)
+  ) %>%
+  ungroup(ELS_ID) %>%
+  mutate(ELS_ID = as.factor(ELS_ID))
+dlpu_auc$dlpu_S_AUCg <-rowSums(dlpu_auc[, c("dlpu_auc1","dlpu_auc2","dlpu_auc3","dlpu_auc4","dlpu_auc5")])
+
+# back to wide format
+dlpu_auc_wide <-
+  dlpu_auc %>%
+  select(ELS_ID, roi, dlpu_S_AUCg) %>%
+  spread(roi, dlpu_S_AUCg)
+```
+
+```{r Gpe}
+# Gpe
+gpe_auc <-
+  gpe %>%
+  mutate(
+    gpe_auc1 = th1toth2 * ((th.1 + th.12) / 2),
+    gpe_auc2 = th2toth3 * ((th.12 + th.14) / 2),
+    gpe_auc3 = th3toth4 * ((th.14 + th.16) / 2),
+    gpe_auc4 = th4toth5 * ((th.16 + th.18) / 2),
+    gpe_auc5 = th5toth6 * ((th.18 + th.20) / 2)
+  ) %>%
+  ungroup(ELS_ID) %>%
+  mutate(ELS_ID = as.factor(ELS_ID))
+gpe_auc$gpe_S_AUCg <-rowSums(gpe_auc[, c("gpe_auc1","gpe_auc2","gpe_auc3","gpe_auc4","gpe_auc5")])  
+
+# back to wide format
+gpe_auc_wide <-
+  gpe_auc %>%
+  select(ELS_ID, roi, gpe_S_AUCg) %>%
+  spread(roi, gpe_S_AUCg)
+```
+
+```{r Gpi}
+# Gpi
+gpi_auc <-
+  gpi %>%
+  mutate(
+    gpi_auc1 = th1toth2 * ((th.1 + th.12) / 2),
+    gpi_auc2 = th2toth3 * ((th.12 + th.14) / 2),
+    gpi_auc3 = th3toth4 * ((th.14 + th.16) / 2),
+    gpi_auc4 = th4toth5 * ((th.16 + th.18) / 2),
+    gpi_auc5 = th5toth6 * ((th.18 + th.20) / 2)
+  ) %>%
+  ungroup(ELS_ID) %>%
+  mutate(ELS_ID = as.factor(ELS_ID))
+gpi_auc$gpi_S_AUCg <-rowSums(gpi_auc[, c("gpi_auc1","gpi_auc2","gpi_auc3","gpi_auc4","gpi_auc5")]) 
+
+# back to wide format
+gpi_auc_wide <-
+  gpi_auc %>%
+  select(ELS_ID, roi, gpi_S_AUCg) %>%
+  spread(roi, gpi_S_AUCg)
+```
+
+```{r lPFtha}
+# lpftha
+lpftha_auc <-
+  lpftha %>%
+  mutate(
+    lpftha_auc1 = th1toth2 * ((th.1 + th.12) / 2),
+    lpftha_auc2 = th2toth3 * ((th.12 + th.14) / 2),
+    lpftha_auc3 = th3toth4 * ((th.14 + th.16) / 2),
+    lpftha_auc4 = th4toth5 * ((th.16 + th.18) / 2),
+    lpftha_auc5 = th5toth6 * ((th.18 + th.20) / 2)
+  ) %>%
+  ungroup(ELS_ID) %>%
+  mutate(ELS_ID = as.factor(ELS_ID))
+lpftha_auc$lpftha_S_AUCg <-rowSums(lpftha_auc[, c("lpftha_auc1","lpftha_auc2","lpftha_auc3","lpftha_auc4","lpftha_auc5")]) 
+
+# back to wide format
+lpftha_auc_wide <-
+  lpftha_auc %>%
+  select(ELS_ID, roi, lpftha_S_AUCg) %>%
+  spread(roi, lpftha_S_AUCg)
+```
+
+```{r mPFtha}
+# mPFtha
+mpftha_auc <-
+  mpftha %>%
+  mutate(
+    mpftha_auc1 = th1toth2 * ((th.1 + th.12) / 2),
+    mpftha_auc2 = th2toth3 * ((th.12 + th.14) / 2),
+    mpftha_auc3 = th3toth4 * ((th.14 + th.16) / 2),
+    mpftha_auc4 = th4toth5 * ((th.16 + th.18) / 2),
+    mpftha_auc5 = th5toth6 * ((th.18 + th.20) / 2)
+  ) %>%
+  ungroup(ELS_ID) %>%
+  mutate(ELS_ID = as.factor(ELS_ID))
+mpftha_auc$mpftha_S_AUCg <-rowSums(mpftha_auc[, c("mpftha_auc1","mpftha_auc2","mpftha_auc3","mpftha_auc4","mpftha_auc5")]) 
+
+# back to wide format
+mpftha_auc_wide <-
+  mpftha_auc %>%
+  select(ELS_ID, roi, mpftha_S_AUCg) %>%
+  spread(roi, mpftha_S_AUCg)
+```
+
+```{r mPMtha}
+# mPMtha
+mpmtha_auc <-
+  mpmtha %>%
+  mutate(
+    mpmtha_auc1 = th1toth2 * ((th.1 + th.12) / 2),
+    mpmtha_auc2 = th2toth3 * ((th.12 + th.14) / 2),
+    mpmtha_auc3 = th3toth4 * ((th.14 + th.16) / 2),
+    mpmtha_auc4 = th4toth5 * ((th.16 + th.18) / 2),
+    mpmtha_auc5 = th5toth6 * ((th.18 + th.20) / 2)
+  ) %>%
+  ungroup(ELS_ID) %>%
+  mutate(ELS_ID = as.factor(ELS_ID))
+mpmtha_auc$mpmtha_S_AUCg <-rowSums(mpmtha_auc[, c("mpmtha_auc1","mpmtha_auc2","mpmtha_auc3","mpmtha_auc4","mpmtha_auc5")]) 
+
+# back to wide format
+mpmtha_auc_wide <-
+  mpmtha_auc %>%
+  select(ELS_ID, roi, mpmtha_S_AUCg) %>%
+  spread(roi, mpmtha_S_AUCg)
+```
+
+```{r NAC}
+# NAC
+nac_auc <-
+  nac %>%
+  mutate(
+    nac_auc1 = th1toth2 * ((th.1 + th.12) / 2),
+    nac_auc2 = th2toth3 * ((th.12 + th.14) / 2),
+    nac_auc3 = th3toth4 * ((th.14 + th.16) / 2),
+    nac_auc4 = th4toth5 * ((th.16 + th.18) / 2),
+    nac_auc5 = th5toth6 * ((th.18 + th.20) / 2)
+  ) %>%
+  ungroup(ELS_ID) %>%
+  mutate(ELS_ID = as.factor(ELS_ID))
+nac_auc$nac_S_AUCg <-rowSums(nac_auc[, c("nac_auc1","nac_auc2","nac_auc3","nac_auc4","nac_auc5")]) 
+
+# back to wide format
+nac_auc_wide <-
+  nac_auc %>%
+  select(ELS_ID, roi, nac_S_AUCg) %>%
+  spread(roi, nac_S_AUCg)
+```
+
+```{r Otha}
+# Otha
+otha_auc <-
+  otha %>%
+  mutate(
+    otha_auc1 = th1toth2 * ((th.1 + th.12) / 2),
+    otha_auc2 = th2toth3 * ((th.12 + th.14) / 2),
+    otha_auc3 = th3toth4 * ((th.14 + th.16) / 2),
+    otha_auc4 = th4toth5 * ((th.16 + th.18) / 2),
+    otha_auc5 = th5toth6 * ((th.18 + th.20) / 2)
+  ) %>%
+  ungroup(ELS_ID) %>%
+  mutate(ELS_ID = as.factor(ELS_ID))
+otha_auc$otha_S_AUCg <-rowSums(otha_auc[, c("otha_auc1","otha_auc2","otha_auc3","otha_auc4","otha_auc5")]) 
+# back to wide format
+otha_auc_wide <-
+  otha_auc %>%
+  select(ELS_ID, roi, otha_S_AUCg) %>%
+  spread(roi, otha_S_AUCg)
+```
+
+
+```{r Pptha}
+# Pptha
+pptha_auc <-
+  pptha %>%
+  mutate(
+    pptha_auc1 = th1toth2 * ((th.1 + th.12) / 2),
+    pptha_auc2 = th2toth3 * ((th.12 + th.14) / 2),
+    pptha_auc3 = th3toth4 * ((th.14 + th.16) / 2),
+    pptha_auc4 = th4toth5 * ((th.16 + th.18) / 2),
+    pptha_auc5 = th5toth6 * ((th.18 + th.20) / 2)
+  ) %>%
+  ungroup(ELS_ID) %>%
+  mutate(ELS_ID = as.factor(ELS_ID))
+pptha_auc$pptha_S_AUCg <-rowSums(pptha_auc[, c("pptha_auc1","pptha_auc2","pptha_auc3","pptha_auc4","pptha_auc5")]) 
+
+# back to wide format
+pptha_auc_wide <-
+  pptha_auc %>%
+  select(ELS_ID, roi, pptha_S_AUCg) %>%
+  spread(roi, pptha_S_AUCg)
+```
+
+```{r rTtha}
+# rTtha
+rttha_auc <-
+  rttha %>%
+  mutate(
+    rttha_auc1 = th1toth2 * ((th.1 + th.12) / 2),
+    rttha_auc2 = th2toth3 * ((th.12 + th.14) / 2),
+    rttha_auc3 = th3toth4 * ((th.14 + th.16) / 2),
+    rttha_auc4 = th4toth5 * ((th.16 + th.18) / 2),
+    rttha_auc5 = th5toth6 * ((th.18 + th.20) / 2)
+  ) %>%
+  ungroup(ELS_ID) %>%
+  mutate(ELS_ID = as.factor(ELS_ID))
+rttha_auc$rttha_S_AUCg <-rowSums(rttha_auc[, c("rttha_auc1","rttha_auc2","rttha_auc3","rttha_auc4","rttha_auc5")]) 
+
+# back to wide format
+rttha_auc_wide <-
+  rttha_auc %>%
+  select(ELS_ID, roi, rttha_S_AUCg) %>%
+  spread(roi, rttha_S_AUCg)
+```
+
+```{r Stha}
+# Stha
+stha_auc <-
+  stha %>%
+  mutate(
+    stha_auc1 = th1toth2 * ((th.1 + th.12) / 2),
+    stha_auc2 = th2toth3 * ((th.12 + th.14) / 2),
+    stha_auc3 = th3toth4 * ((th.14 + th.16) / 2),
+    stha_auc4 = th4toth5 * ((th.16 + th.18) / 2),
+    stha_auc5 = th5toth6 * ((th.18 + th.20) / 2)
+  ) %>%
+  ungroup(ELS_ID) %>%
+  mutate(ELS_ID = as.factor(ELS_ID))
+stha_auc$stha_S_AUCg <-rowSums(stha_auc[, c("stha_auc1","stha_auc2","stha_auc3","stha_auc4","stha_auc5")])
+
+# back to wide format
+stha_auc_wide <-
+  stha_auc %>%
+  select(ELS_ID, roi, stha_S_AUCg) %>%
+  spread(roi, stha_S_AUCg)
+```
+
+```{r vCA}
+# vCA
+vca_auc <-
+  vca %>%
+  mutate(
+    vca_auc1 = th1toth2 * ((th.1 + th.12) / 2),
+    vca_auc2 = th2toth3 * ((th.12 + th.14) / 2),
+    vca_auc3 = th3toth4 * ((th.14 + th.16) / 2),
+    vca_auc4 = th4toth5 * ((th.16 + th.18) / 2),
+    vca_auc5 = th5toth6 * ((th.18 + th.20) / 2)
+  ) %>%
+  ungroup(ELS_ID) %>%
+  mutate(ELS_ID = as.factor(ELS_ID))
+vca_auc$vca_S_AUCg <-rowSums(vca_auc[, c("vca_auc1","vca_auc2","vca_auc3","vca_auc4","vca_auc5")]) 
+
+# back to wide format
+vca_auc_wide <-
+  vca_auc %>%
+  select(ELS_ID, roi, vca_S_AUCg) %>%
+  spread(roi, vca_S_AUCg)
+```
+
+```{r vmPu}
+# vmPu
+vmpu_auc <-
+  vmpu %>%
+  mutate(
+    vmpu_auc1 = th1toth2 * ((th.1 + th.12) / 2),
+    vmpu_auc2 = th2toth3 * ((th.12 + th.14) / 2),
+    vmpu_auc3 = th3toth4 * ((th.14 + th.16) / 2),
+    vmpu_auc4 = th4toth5 * ((th.16 + th.18) / 2),
+    vmpu_auc5 = th5toth6 * ((th.18 + th.20) / 2)
+  ) %>%
+  ungroup(ELS_ID) %>%
+  mutate(ELS_ID = as.factor(ELS_ID))
+vmpu_auc$vmpu_S_AUCg <-rowSums(vmpu_auc[, c("vmpu_auc1","vmpu_auc2","vmpu_auc3","vmpu_auc4","vmpu_auc5")])
+
+# back to wide format
+vmpu_auc_wide <-
+  vmpu_auc %>%
+  select(ELS_ID, roi, vmpu_S_AUCg) %>%
+  spread(roi, vmpu_S_AUCg)
+```
+
+```{r SN}
+# SN
+sn_auc <-
+  sn %>%
+  mutate(
+    sn_auc1 = th1toth2 * ((th.1 + th.12) / 2),
+    sn_auc2 = th2toth3 * ((th.12 + th.14) / 2),
+    sn_auc3 = th3toth4 * ((th.14 + th.16) / 2),
+    sn_auc4 = th4toth5 * ((th.16 + th.18) / 2),
+    sn_auc5 = th5toth6 * ((th.18 + th.20) / 2)
+  ) %>%
+  ungroup(ELS_ID) %>%
+  mutate(ELS_ID = as.factor(ELS_ID))
+sn_auc$sn_S_AUCg <-rowSums(sn_auc[, c("sn_auc1","sn_auc2","sn_auc3","sn_auc4","sn_auc5")]) 
+
+# back to wide format
+sn_auc_wide <-
+  sn_auc %>%
+  select(ELS_ID, roi, sn_S_AUCg) %>%
+  spread(roi, sn_S_AUCg)
+```
+
+# joinging roi dfs
+```{r}
+eig_cent_aucs <-
+  left_join(amyg_auc_wide,
+            cg_auc_wide,
+            by = "ELS_ID") 
+eig_cent_aucs <-
+  left_join(eig_cent_aucs,
+            fug_auc_wide,
+            by = "ELS_ID") 
+eig_cent_aucs <-
+  left_join(eig_cent_aucs,
+            hipp_auc_wide,
+            by = "ELS_ID") 
+eig_cent_aucs <-
+  left_join(eig_cent_aucs,
+            ifg_auc_wide,
+            by = "ELS_ID") 
+eig_cent_aucs <-
+  left_join(eig_cent_aucs,
+           ins_auc_wide,
+            by = "ELS_ID") 
+eig_cent_aucs <-
+  left_join(eig_cent_aucs,
+           ipl_auc_wide,
+            by = "ELS_ID") 
+eig_cent_aucs <-
+  left_join(eig_cent_aucs,
+           itg_auc_wide,
+            by = "ELS_ID") 
+eig_cent_aucs <-
+  left_join(eig_cent_aucs,
+           locc_auc_wide,
+            by = "ELS_ID") 
+eig_cent_aucs <-
+  left_join(eig_cent_aucs,
+           mfg_auc_wide,
+            by = "ELS_ID") 
+eig_cent_aucs <-
+  left_join(eig_cent_aucs,
+            mtg_auc_wide,
+            by = "ELS_ID") 
+eig_cent_aucs <-
+  left_join(eig_cent_aucs,
+           mvocc_auc_wide,
+            by = "ELS_ID") 
+eig_cent_aucs <-
+  left_join(eig_cent_aucs,
+           org_auc_wide,
+            by = "ELS_ID") 
+eig_cent_aucs <-
+  left_join(eig_cent_aucs,
+           pcl_auc_wide,
+            by = "ELS_ID") 
+eig_cent_aucs <-
+  left_join(eig_cent_aucs,
+           pcun_auc_wide,
+            by = "ELS_ID") 
+eig_cent_aucs <-
+  left_join(eig_cent_aucs,
+           phg_auc_wide,
+            by = "ELS_ID") 
+eig_cent_aucs <-
+  left_join(eig_cent_aucs,
+           pog_auc_wide,
+            by = "ELS_ID") 
+eig_cent_aucs <-
+  left_join(eig_cent_aucs,
+           prg_auc_wide,
+            by = "ELS_ID") 
+eig_cent_aucs <-
+  left_join(eig_cent_aucs,
+           psts_auc_wide,
+            by = "ELS_ID") 
+eig_cent_aucs <-
+  left_join(eig_cent_aucs,
+           sfg_auc_wide,
+            by = "ELS_ID") 
+eig_cent_aucs <-
+  left_join(eig_cent_aucs,
+           spl_auc_wide,
+            by = "ELS_ID") 
+eig_cent_aucs <-
+  left_join(eig_cent_aucs,
+           stg_auc_wide,
+            by = "ELS_ID")
+eig_cent_aucs <-
+  left_join(eig_cent_aucs,
+           cttha_auc_wide,
+            by = "ELS_ID")
+eig_cent_aucs <-
+  left_join(eig_cent_aucs,
+           dca_auc_wide,
+            by = "ELS_ID")
+eig_cent_aucs <-
+  left_join(eig_cent_aucs,
+           dlpu_auc_wide,
+            by = "ELS_ID")
+eig_cent_aucs <-
+  left_join(eig_cent_aucs,
+           gpe_auc_wide,
+            by = "ELS_ID")
+eig_cent_aucs <-
+  left_join(eig_cent_aucs,
+           gpi_auc_wide,
+            by = "ELS_ID")
+eig_cent_aucs <-
+  left_join(eig_cent_aucs,
+           lpftha_auc_wide,
+            by = "ELS_ID")
+eig_cent_aucs <-
+  left_join(eig_cent_aucs,
+           mpftha_auc_wide,
+            by = "ELS_ID")
+eig_cent_aucs <-
+  left_join(eig_cent_aucs,
+           mpmtha_auc_wide,
+            by = "ELS_ID")
+eig_cent_aucs <-
+  left_join(eig_cent_aucs,
+           nac_auc_wide,
+            by = "ELS_ID")
+eig_cent_aucs <-
+  left_join(eig_cent_aucs,
+           otha_auc_wide,
+            by = "ELS_ID")
+eig_cent_aucs <-
+  left_join(eig_cent_aucs,
+           pptha_auc_wide,
+            by = "ELS_ID")
+eig_cent_aucs <-
+  left_join(eig_cent_aucs,
+           rttha_auc_wide,
+            by = "ELS_ID")
+eig_cent_aucs <-
+  left_join(eig_cent_aucs,
+           stha_auc_wide,
+            by = "ELS_ID")
+eig_cent_aucs <-
+  left_join(eig_cent_aucs,
+           vca_auc_wide,
+            by = "ELS_ID")
+eig_cent_aucs <-
+  left_join(eig_cent_aucs,
+           vmpu_auc_wide,
+            by = "ELS_ID")
+eig_cent_aucs <-
+  left_join(eig_cent_aucs,
+           sn_auc_wide,
+            by = "ELS_ID")
+```
+
+```{r}
+eig_cent_aucs_select <-
+  eig_cent_aucs %>%
+  rename_at(
+    vars(-ELS_ID),
+    function(x)
+      paste0(x, ".eig_cent")
+    )
+```
+
+
+
+
+
+### write csv
+```{r}
+eig_cent_aucs_select_fp <-"~/Box/eig_cent_aucs.csv"
+write_csv(eig_cent_aucs_select,eig_cent_aucs_select_fp)
+```

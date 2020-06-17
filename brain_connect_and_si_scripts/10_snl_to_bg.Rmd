@@ -1,0 +1,296 @@
+---
+title: "10_snl_to_bg"
+author: "Jackie"
+date: "6/9/2020"
+output: html_notebook
+---
+
+```{r}
+
+library(tidyverse)
+library(modelr)
+library(R.matlab)
+library(purrr)
+library(repurrrsive)
+library(magrittr)
+library(readxl)
+
+```
+
+# read in els id
+```{r}
+var_subjs = "~/Box/var_subjs.csv"
+ELS_ID <- read_csv(var_subjs) %>%
+  dplyr::select(Subj_ID, ELS_ID)
+```
+
+
+# load files
+```{r}
+file_subj_name <- list.files(
+  path = "~/Box/CorrelationMatrices_Fish",
+  pattern = "*.mat", full.names = FALSE 
+)
+files <- list.files(
+  path = "~/Box/CorrelationMatrices_Fish",
+  pattern = "*.mat", full.names = TRUE)
+
+file_comb <- cbind(files, file_subj_name)
+```
+
+# combine mat files  and extract corr matrices from each
+```{r}
+# combining mat files into a list
+tbl <- rbind(lapply(file_comb[,1],
+  readMat)
+  )
+tbl_corr <- map(tbl, extract, c("fish.corr")) 
+```
+
+# load nodes
+```{r}
+nodes_fp <- "~/Box/BrainRegions.xlsx"
+
+nodes <- read_excel(nodes_fp, col_names = FALSE)
+```
+
+# Renaming variables for nodes file
+```{r}
+nodes <-
+  nodes %>%
+  rename(
+    "include" = `...1`,
+    "brainnetome_name" = `...2`,
+    "brain_name" = `...3`,
+    "x" = `...4`,
+    "y" = `...5`,
+    "z" = `...6`
+  ) %>%
+  mutate(
+    brainnetome_name = as.factor(brainnetome_name),
+    brain_name = as.factor(brain_name)
+  )
+```
+
+## exttracting brain_name
+```{r}
+#
+names <- c("SFG_L_1", "SFG_R_2", "SFG_L_3", "SFG_R_4", "SFG_L_5", "SFG_R_6", "SFG_L_7",  "SFG_R_8", "SFG_L_9", "SFG_R_10", "SFG_L_11", "SFG_R_12", "SFG_L_13", "SFG_R_14", "MFG_L_15", "MFG_R_16", "MFG_L_17", "MFG_R_18", "MFG_L_19", "MFG_R_20", "MFG_L_21", "MFG_R_22", "MFG_L_23", "MFG_R_24", "MFG_L_25", "MFG_R_26", "MFG_L_27", "MFG_R_28", "IFG_L_29", "IFG_R_30", "IFG_L_31", "IFG_R_32", "IFG_L_33", "IFG_R_34", "IFG_L_35", "IFG_R_36", "IFG_L_37", "IFG_R_38", "IFG_L_39", "IFG_R_40", "OrG_L_41", "OrG_R_42", "OrG_L_43", "OrG_R_44", "OrG_L_45", "OrG_R_46", "OrG_L_47", "OrG_R_48", "OrG_L_49", "OrG_R_50", "OrG_L_51", "OrG_R_52", "PrG_L_53", "PrG_R_54", "PrG_L_55", "PrG_R_56", "PrG_L_57", "PrG_R_58", "PrG_L_59", "PrG_R_60", "PrG_L_61", "PrG_R_62", "PrG_L_63", "PrG_R_64", "PCL_L_65", "PCL_R_66", "PCL_L_67", "PCL_R_68", "STG_L_69", "STG_R_70", "STG_L_71", "STG_R_72", "STG_L_73", "STG_R_74", "STG_L_75", "STG_R_76", "STG_L_77", "STG_R_78", "STG_L_79", "STG_R_80", "MTG_L_81", "MTG_R_82", "MTG_L_83", "MTG_R_84", "MTG_L_85", "MTG_R_86", "MTG_L_87", "MTG_R_88", "ITG_L_89", "ITG_R_90", "ITG_L_91", "ITG_R_92", "ITG_L_93", "ITG_R_94", "ITG_L_95", "ITG_R_96", "ITG_L_97", "ITG_R_98", "ITG_L_99", "ITG_R_100", "ITG_L_101", "ITG_R_102", "FuG_L_103", "FuG_R_104", "FuG_L_105", "FuG_R_106", "FuG_L_107", "FuG_R_108", "PhG_L_109", "PhG_R_110", "PhG_L_111", "PhG_R_112", "PhG_L_113", "PhG_R_114", "PhG_L_115", "PhG_R_116", "PhG_L_117", "PhG_R_118", "PhG_L_119", "PhG_R_120", "pSTS_L_121", "pSTS_R_122", "pSTS_L_123", "pSTS_R_124", "SPL_L_125", "SPL_R_126", "SPL_L_127", "SPL_R_128", "SPL_L_129", "SPL_R_130", "SPL_L_131", "SPL_R_132", "SPL_L_133", "SPL_R_134", "IPL_L_135", "IPL_R_136", "IPL_L_137", "IPL_R_138", "IPL_L_139", "IPL_R_140", "IPL_L_141", "IPL_R_142", "IPL_L_143", "IPL_R_144", "IPL_L_145", "IPL_R_146", "Pcun_L_147", "Pcun_R_148", "Pcun_L_149", "Pcun_R_150", "Pcun_L_151", "Pcun_R_152", "Pcun_L_153", "Pcun_R_154", "PoG_L_155", "PoG_R_156", "PoG_L_157", "PoG_R_158", "PoG_L_159", "PoG_R_160", "PoG_L_161", "PoG_R_162", "INS_L_163", "INS_R_164", "INS_L_165", "INS_R_166", "INS_L_167", "INS_R_168", "INS_L_169", "INS_R_170", "INS_L_171", "INS_R_172", "INS_L_173", "INS_R_174", "CG_L_175", "CG_R_176", "CG_L_177", "CG_R_178", "CG_L_179", "CG_R_180", "CG_L_181", "CG_R_182", "CG_L_183", "CG_R_184", "CG_L_185", "CG_R_186", "CG_L_187", "CG_R_188", "MVocC_L_189", "MVocC_R_190", "MVocC_L_191", "MVocC_R_192", "MVocC_L_193", "MVocC_R_194", "MVocC_L_195", "MVocC_R_196", "MVocC_L_197", "MVocC_R_198", "LOcC_L_199", "LOcC_R_200", "LOcC_L_201", "LOcC_R_202", "LOcC_L_203", "LOcC_R_204", "LOcC_L_205", "LOcC_R_206", "LOcC_L_207", "LOcC_R_208", "LOcC_L_209", "LOcC_R_210", "Amyg_L_211", "Amyg_R_212", "Amyg_L_213", "Amyg_R_214", "Hipp_L_215", "Hipp_R_216", "Hipp_L_217", "Hipp_R_218", "vCA_L_219", "vCA_R_220", "Gpe_L_221", "Gpe_R_222", "Gpi_L_223", "Gpi_R_224", "SN_L_225", "SN_R_226", "NAC_L_229", "NAC_R_230", "vmPu_L_231", "vmPU_R_232", "dCa_L_233", "dCA_R_234", "dlPu_L_235", "dlPu_R_236", "mPFtha_L_237", "mPFtha_R_238", "mPMtha_L_239", "mPMtha_R_240", "Stha_L_241", "Stha_R_242", "rTtha_L_243", "rTtha_R_244", "Pptha_L_245", "Ppptha_R_246", "Otha_L_247", "Otha_R_248", "cTtha_L_249", "cTtha_R_250", "lPFtha_L_251", "lPFtha_R_252")
+rois <- data.frame(names) %>%
+  rename(rois = names)
+
+```
+
+```{r}
+bg <- c("vCA_L_219", "vCA_R_220", "Gpe_L_221", "Gpe_R_222", "Gpi_L_223", "Gpi_R_224", "SN_L_225", "SN_R_226", "NAC_L_229", "NAC_R_230", "vmPu_L_231", "vmPU_R_232", "dCa_L_233", "dCA_R_234", "dlPu_L_235", "dlPu_R_236")
+```
+
+
+### just a test
+```{r}
+z = as.matrix(tbl_corr[[55]][["fish.corr"]])
+colnames(z) <- names
+z <- cbind(rois, z)
+zz <- z %>%
+  dplyr:: select(rois, vCA_L_219:dlPu_R_236) %>%
+  mutate(bgs = rois %in% bg) %>%
+  filter(bgs == TRUE) %>%
+  dplyr::select(-bgs) %>%
+  filter(rois == "SN_R_226")
+
+zz[zz<0] <- 0
+
+zz_ind <-
+  zz %>%
+  rename_at(
+    vars(-rois),
+    function(x)
+      paste0(x, "-SN_R_226")
+    ) 
+```
+
+## for everyone
+```{r}
+
+tbl_corr_mats <- NULL
+subj <- NULL
+subjs <- NULL
+
+
+for (i in seq_along(tbl_corr)) {
+  
+  subj = as.matrix(tbl_corr[[i]][["fish.corr"]])
+  
+  colnames(subj) <- names
+  subj <- cbind(rois, subj)
+  
+  subjs <- subj %>%
+  dplyr:: select(rois, vCA_L_219:dlPu_R_236) %>%
+  mutate(bgs = rois %in% bg) %>%
+  filter(bgs == TRUE) %>%
+  dplyr::select(-bgs) %>%
+  filter(rois == "SN_R_226") %>%
+  rename_at(
+    vars(-rois),
+    function(x)
+      paste0(x, ".SN_R_226")
+    )
+  
+  tbl_corr_mats = rbind(tbl_corr_mats, subjs)
+
+}
+
+```
+
+
+
+```{r}
+# converting corr_means matrix to dataframe and renaming variable
+tbl_corr_mats_df <-
+  tbl_corr_mats %>%
+  data.frame() %>%
+  rownames_to_column(var = "id")
+
+tbl_corr_mats_comb <- cbind(ELS_ID, tbl_corr_mats_df)
+
+# setting neg weights to zero
+tbl_corr_mats_comb[, 5:20][tbl_corr_mats_comb[, 5:20] < 0] <- 0
+```
+
+# read in suicide data
+```{r}
+
+siq_fp <- "~/Box/siq_graph.csv"
+
+siq <- read_csv(siq_fp) %>%
+  dplyr::select(ELS_ID, siq_total_log)
+```
+
+```{r}
+options(scipen=999) 
+z_score <- function(x) {
+diff_mu <- x - mean(x, na.rm = T)
+sd <- sd(x, na.rm = T)
+diff_mu / sd
+}
+```
+
+```{r}
+stand_siq <- siq %>%
+  mutate(siq_total_log_z = scale(siq_total_log, center = TRUE, scale = TRUE),
+         ELS_ID = factor(ELS_ID))
+
+bg_corrs <- tbl_corr_mats_comb %>%
+  mutate(ELS_ID = factor(ELS_ID))
+
+# merging
+bg_corr_and_siq <- left_join(stand_siq, bg_corrs, by = "ELS_ID")
+
+# deselecting variables
+bg_corr_and_siq <- bg_corr_and_siq %>%
+  dplyr::select(-Subj_ID, -id, -rois, -siq_total_log, -SN_R_226.SN_R_226)
+
+# standardizing predictors
+bg_corr_and_siq_stand <- bg_corr_and_siq %>%
+  mutate_at(vars(-ELS_ID, -siq_total_log_z), z_score)
+
+bg_corr_and_siq_fp <- "~/Box/bg_corr_and_siq.csv"
+write_csv(bg_corr_and_siq, bg_corr_and_siq_fp)
+
+bg_corr_and_siq_stand_fp <- "~/Box/bg_corr_and_siq_stand.csv"
+write_csv(bg_corr_and_siq_stand, bg_corr_and_siq_stand_fp)
+```
+
+```{r}
+library(corrplot)
+library(corrr)
+corr <- 
+  bg_corr_and_siq_stand %>%
+  dplyr::select(
+    ends_with("SN_R_226")
+    ) %>%
+  cor()
+
+cor_tbl <- 
+  bg_corr_and_siq_stand %>%
+  dplyr::select(
+    ends_with("SN_R_226")
+  ) %>% 
+  correlate(use = "complete.obs", method = "spearman") %>% 
+  fashion()
+cor_tbl
+
+png(height=800, width=800, file="bg_corr_siq")
+corrplot(corr, 
+         method = "color",
+         order = "hclust",
+         tl.cex = 1, 
+         tl.col = "black", 
+         type = "upper")
+dev.off()
+```
+
+The atlas includes six subcorticalnuclei:thestriatum(STR),the globus pallidus internal and external segment(GPi/e),the subthalamic nucleus(STN),the
+substantia nigra(SN),and the rednucleus(RN).
+
+We have 16 s2s variables. Need to penalize. PErforming best subset
+
+Select the subset of predictors that do the best at meeting some well-defined objective criterion, such as having the largest R2 value or the smallest MSE, Mallow’s Cp or AIC
+
+From: https://olsrr.rsquaredacademy.com/articles/variable_selection.html#best-subset-regression
+
+```{r}
+# library(devtools)
+# install_github(repo="ryantibs/best-subset", subdir="bestsubset")
+library(olsrr)
+
+test <- lm(siq_total_log_z ~ vCA_L_219.SN_R_226 + vCA_R_220.SN_R_226 + Gpe_L_221.SN_R_226 + Gpe_R_222.SN_R_226 +Gpi_L_223.SN_R_226 + Gpi_R_224.SN_R_226 +SN_L_225.SN_R_226 + NAC_L_229.SN_R_226 + NAC_R_230.SN_R_226 +  vmPu_L_231.SN_R_226 + vmPU_R_232.SN_R_226 + dCa_L_233.SN_R_226 + dCA_R_234.SN_R_226 + dlPu_L_235.SN_R_226 + dlPu_R_236.SN_R_226,data = bg_corr_and_siq_stand)
+
+k <- ols_step_best_subset(test)
+k
+plot(k)
+
+# model 4 seems to be the best
+#4         Gpe_L_221.SN_R_226 SN_L_225.SN_R_226 vmPu_L_231.SN_R_226 vmPU_R_232.SN_R_226
+# # 4        0.1079      0.0707     -0.0059    -0.0690    286.0868     0.5440    301.7775    93.8849    0.9753    0.0098    0.9850 
+k$adjr
+```
+
+
+## trying with the leaps package
+From: https://rpubs.com/davoodastaraky/subset
+
+```{r}
+library(leaps)
+fit_all = regsubsets(siq_total_log_z ~ vCA_L_219.SN_R_226 + vCA_R_220.SN_R_226 + Gpe_L_221.SN_R_226 + Gpe_R_222.SN_R_226 +Gpi_L_223.SN_R_226 + Gpi_R_224.SN_R_226 +SN_L_225.SN_R_226 + NAC_L_229.SN_R_226 + NAC_R_230.SN_R_226 +  vmPu_L_231.SN_R_226 + vmPU_R_232.SN_R_226 + dCa_L_233.SN_R_226 + dCA_R_234.SN_R_226 + dlPu_L_235.SN_R_226 + dlPu_R_236.SN_R_226, data = bg_corr_and_siq_stand)
+summary(fit_all)
+modelfit <- summary(fit_all)
+names(modelfit) 
+r_sq <- modelfit$rsq
+cp <- modelfit$cp
+```
+Plotting RSS, adjusted R2, Cp, and BIC 
+
+From: https://rpubs.com/davoodastaraky/subset
+
+```{r}
+
+plot(modelfit$rss ,xlab="Number of Variables ",ylab="RSS",type="l")
+which.min(modelfit$rss)
+plot(modelfit$adjr2 ,xlab="Number of Variables ", ylab="Adjusted RSq",type="l")
+which.max(modelfit$adjr2)
+plot(modelfit$cp ,xlab="Number of Variables ",ylab="Cp", type='l')
+which.min(modelfit$cp )
+plot(modelfit$bic ,xlab="Number of Variables ",ylab="BIC",type='l')
+which.min(modelfit$bic )
+```
+
+
+```{r}
+estimates <- coef(fit_all ,4)
+estimates <- as.data.frame(estimates) %>%
+  rownames_to_column()
+bg_corr_si_estimates_fp <- "~/Box/bg_corr_si_estimates.csv"
+write_csv(estimates, bg_corr_si_estimates_fp)
+```
+

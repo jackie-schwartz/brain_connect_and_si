@@ -1,0 +1,128 @@
+---
+title: "local_graph_t1_analysis"
+author: "Jackie"
+date: "5/24/2020"
+output:
+  html_notebook:
+    df_print: paged
+    toc: TRUE
+    toc_float: TRUE
+---
+Just looking at degree, eigenvector centrality, local efficiency,  
+participation coefficient, within-mod z score
+
+# Loading libraries
+```{r,echo=FALSE,results='hide',message=FALSE}
+library(tidyverse)
+library(haven)
+library(modelr)
+library(readxl)
+library(Rcpp)
+library(httpuv)
+library(shiny)
+library(plotly)
+library(corrr)
+library(seriation)
+library(d3heatmap)
+library(heatmaply)
+library(corrplot)
+library(haven)
+library(stringr)
+```
+
+### filepaths
+```{r, echo=FALSE, message=FALSE}
+graph_fp <- "~/Box/graph_all.csv"
+```
+
+
+### read in data
+```{r, echo=FALSE, message=FALSE}
+graph <- read_csv(graph_fp) %>%
+  mutate(ELS_ID = factor(ELS_ID))
+```
+
+
+# data viz
+
+### node by node for graphing
+
+```{r}
+graph_long <-
+  graph %>%
+  select(
+    ELS_ID,
+    ends_with(".eff_loc"),
+    ends_with(".wm_z"),
+    ends_with(".pc"),
+    ends_with(".eig_cent"),
+    ends_with(".deg")
+  ) %>%
+  gather(
+    key = roi,
+    value = value,
+    ends_with(".eff_loc"),
+    ends_with(".wm_z"),
+    ends_with(".pc"),
+    ends_with(".eig_cent"),
+    ends_with(".deg")
+  ) %>%
+  separate(
+    col = roi,
+    into = c("roi", "property"),
+    sep =  "[.]"
+  ) %>%
+  spread(
+    property, value
+  )
+  
+```
+
+```{r}
+graph_long_fp <- "~/Box/graph_all_long.csv"
+write_csv(graph_long, graph_long_fp)
+```
+
+
+```{r}
+# degree
+graph_long %>%
+  ggplot(.,
+         aes(x=deg,  alpha = .5)) +
+  geom_histogram(position = "identity") +
+  theme_bw() +
+  ggtitle("Distribution of Degree")
+
+# local efficiency
+graph_long %>%
+  ggplot(.,
+         aes(x=eff_loc, alpha = .5)) +
+  geom_histogram(position = "identity") +
+  theme_bw() +
+  ggtitle("Distribution of Local Efficiency")
+
+# eigenvector centrality
+graph_long %>%
+  ggplot(.,
+         aes(x=eig_cent, alpha = .5)) +
+  geom_histogram(position = "identity") +
+  theme_bw() +
+  ggtitle("Distribution of Eigenvector Centrality")
+
+# part coefficient
+graph_long %>%
+  ggplot(.,
+         aes(x=pc, alpha = .5)) +
+  geom_histogram(position = "identity") +
+  theme_bw() +
+  ggtitle("Distribution of Participation Coefficient")
+
+# within mod z score
+graph_long %>%
+  ggplot(.,
+         aes(x=wm_z, alpha = .5)) +
+  geom_histogram(position = "identity") +
+  theme_bw() +
+  ggtitle("Distribution of Within-Module Z Score")
+```
+

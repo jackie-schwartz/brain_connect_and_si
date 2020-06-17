@@ -1,0 +1,390 @@
+---
+title: "siq"
+author: "Jackie"
+date: "5/24/2020"
+output: html_notebook
+---
+
+Data structure: SI information based on the Suicidal Ideation Questionnaire-JR (Reynolds, 1987) 
+- 15 items ranging from 0 - 6 (higher score = higher severity)
+- For total, sum scores for 15 items, for total possible score of 90
+
+Purpose: To identify which "family" fits my response variable (the SIQ) best for elastic net.
+
+
+# Loading libraries
+```{r, message=FALSE}
+library(tidyverse)
+library(haven)
+library(modelr)
+library(readxl)
+library(Rcpp)
+library(httpuv)
+library(corrr)
+library(seriation)
+library(d3heatmap)
+library(heatmaply)
+library(corrplot)
+library(haven)
+library(naniar)
+library(brms)
+library(rstan)
+library(bayesplot)
+library(rstanarm)
+library(knitr)
+library(loo)
+library(nonnest2)
+```
+
+# filepaths
+```{r, echo=FALSE, message=FALSE}
+siq_t3_fp <- "~/Box/siq.T3.csv"
+graph_fp <- "~/Box/graph_all.csv"
+```
+
+# reading in files
+```{r, echo=FALSE, message=FALSE}
+siq_t3 <- read_csv(siq_t3_fp)  %>%
+  mutate(ELS_ID = factor(ELS_ID))
+
+graph <- read_csv(graph_fp) %>%
+  mutate(ELS_ID = factor(ELS_ID))
+```
+
+# score siq data
+
+### filtering out duplicated IDs 
+_I'm using the .5/.2 sessions bc they are closest to the scan date_
+```{r}
+siq_t3_dup <- siq_t3 %>%
+  filter(duplicated(ELS_ID)
+         ) # duplicated IDs
+
+siq_t3_clean <- siq_t3 %>%
+  mutate(reassessed =
+           ifelse(is.na(Session_Type),
+                  "no",
+                  "yes"
+           )
+  )
+
+siq_t3_clean_unique <- siq_t3_clean %>%
+  filter(!("xx" & 
+           is.na(Session_Type)
+           )
+         ) %>%
+    filter(!("xx" &
+               is.na(Session_Type)
+             )
+           )
+
+```
+
+## recoding 999s and 888s
+```{r}
+vars <- c("siq_1.T3", "siq_2.T3", "siq_3.T3",  "siq_4.T3", "siq_5.T3", "siq_6.T3", "siq_7.T3", "siq_8.T3", "siq_9.T3", "siq_10.T3", "siq_11.T3", "siq_12.T3", "siq_13.T3", "siq_14.T3", "siq_15.T3")
+
+siq_t3_clean_unique <- 
+  siq_t3_clean_unique %>%
+  replace_with_na_at(.,
+                     .vars = vars,
+                     condition = ~.x == 999) %>%
+  dplyr::select(-SIQ_total.T3, -reassessed)
+
+```
+
+## scoring siq total
+```{r}
+siq_t3_clean_total <-
+  siq_t3_clean_unique %>%
+  mutate(
+    siq_total.T3 = 
+      rowSums(siq_t3_clean_unique[,(which(names(siq_t3_clean_unique)=='siq_1.T3'):which(names(siq_t3_clean_unique)=='siq_15.T3'))])
+  ) %>%
+  drop_na(siq_total.T3) %>%
+  mutate(ELS_ID = factor(ELS_ID))
+```
+
+### cronbach's alpha
+```{r}
+library(cocron)
+siq_t3_alpha <- siq_t3_clean_total %>%
+  dplyr::select(siq_1.T3:siq_15.T3)
+
+cronbach.alpha(siq_t3_alpha, standardized = T)
+# alpha 
+# 0.96098 
+```
+
+### merging SI and brain data
+```{r}
+siq_graph <- left_join(graph, siq_t3_clean_total,
+                       by = "ELS_ID") %>%
+  drop_na(siq_total.T3)
+
+# 114 individuals with SIQ at T3 (13 of which do not have usable brain data at T1)
+# 173 individuals with brain data at T1
+
+siq_graph_fp <- "~/Box/siq_graph.csv"
+write_csv(siq_graph, siq_graph_fp)
+```
+
+
+# data viz
+```{r}
+siq_graph_plot <- siq_graph %>% 
+ dplyr::select(ELS_ID, siq_total.T3) %>%
+  ggplot(.,
+         aes(x=siq_total.T3)) +
+  geom_histogram(bins = 25, position = "identity", alpha = .5) +
+  scale_x_continuous(breaks = seq(from = 0, to = 70, by = 5), 
+                     name = "SIQ Scores") +
+  scale_y_continuous(breaks = seq(from = 0, to = 50, by = 5)) +
+  ggtitle("Distribution of suicidal ideation") +
+  theme_light()
+ggsave("siq_graph.jpg", siq_graph_plot, width = 7, height = 5)
+```
+#### summary table
+```{r}
+# Create the function for mode
+getmode <- function(v) {
+   uniqv <- unique(v)
+   uniqv[which.max(tabulate(match(v, uniqv)))]
+}
+
+siq_sum_table <-
+  siq_graph %>% 
+  summarize(
+    mean_si = mean(siq_total.T3),
+    median_si = median(siq_total.T3),
+    mode_si = getmode(siq_total.T3),
+    min_si = min(siq_total.T3),
+    max_si = max(siq_total.T3),
+    n = n()
+    )
+
+```
+
+
+__Bayesian Regression Model using 'Stan' (brms)__ Package to see which distribution fits my response data (SIQ) the best.
+
+## What is the proportion of zeros in my response data?
+```{r, message=FALSE}
+# creating function to get proportion of zero
+prop_zero <- function(x) mean(x == 0)
+
+
+prop_zero(siq_graph$siq_total.T3) # check proportion of zeros in y
+# 0.1188119
+
+```
+
+> There are approx. 11.9% of zeros in my response data (SIQ)
+
+## using brm to see which distribution fits SIQ in my data the best
+
+### poisson
+```{r, message=FALSE}
+# poisson
+fit_p <- brm(siq_total.T3 ~ 1, data = siq_graph, family = poisson()) 
+summary(fit_p)
+fit_p <- add_criterion(fit_p, c("loo", "kfold", "waic"))
+l_fit_p <- loo(fit_p, save_psis = TRUE, k_threshold = 0.7) # the importance sampling method we used is psis =  Pareto-Smoothed Importance Sampling 
+# k_threshold = Threshold for flagging estimates of the Pareto shape parameters 𝑘 estimated by loo
+pareto_k_table(l_fit_p)
+plot(l_fit_p, diagnotic="k")
+print(l_fit_p)
+plot(fit_p)
+pp_check(fit_p)
+```
+
+### zero inflated poisson
+```{r, message=FALSE}
+# zero inflated poisson
+fit_zip <- brm(siq_total.T3 ~ 1, data = siq_graph, family = zero_inflated_poisson())
+summary(fit_zip)
+fit_zip <- add_criterion(fit_zip, c("loo", "kfold", "waic"), reloo = TRUE)
+l_fit_zip <- loo(fit_zip, save_psis = TRUE, k_threshold = 0.7)
+plot(l_fit_zip, diagnotic="k")
+print(l_fit_zip)
+plot(fit_zip)
+pp_check(fit_zip)
+```
+
+### zero inflated negative binomial
+```{r, message=FALSE}
+# zero inflated binomial
+fit_zib <- brm(siq_total.T3 ~ 1, data = siq_graph, family = zero_inflated_negbinomial())
+summary(fit_zib)
+fit_zib <- add_criterion(fit_zib, c("loo", "kfold", "waic"), reloo = TRUE)
+l_fit_zib <- loo(fit_zib, save_psis = TRUE, k_threshold = 0.7)
+plot(l_fit_zib, diagnotic="k")
+print(l_fit_zib)
+plot(fit_zib)
+pp_check(fit_zib)
+```
+
+### negative binomial
+```{r, message=FALSE}
+# neg binomial
+fit_nb <- brm(siq_total.T3 ~ 1, data = siq_graph, family = negbinomial())
+summary(fit_nb)
+fit_nb <- add_criterion(fit_nb, c("loo", "kfold", "waic"), reloo = TRUE)
+l_fit_nb <- loo(fit_nb, save_psis = TRUE, k_threshold = 0.7)
+plot(l_fit_nb, diagnotic="k")
+print(l_fit_nb)
+plot(fit_nb)
+pp_check(fit_nb)
+fit_nb$fit
+glm.nb(siq_total.T3 ~ 1, data = siq_graph)
+```
+
+
+## Comparing Models  
+_widely applicable information criterion (waic)_  
+_leave one out (loo)_  
+_k-fold cross validation_ 
+
+### comparing poisson and zero inflated poisson (ZIP)
+```{r, message=FALSE}
+lo_compare_zipandp <- loo_compare(fit_zip, fit_p, criterion = c("loo", "waic", "kfold"))
+print(lo_compare_zipandp)
+#        elpd_diff se_diff
+# fit_zip   0.0       0.0  
+# fit_p   -84.5      28.8  
+
+model_weights(fit_zip, fit_p)
+#  fit_zip    fit_p 
+# 0.5258663 0.4741337 
+
+loo(fit_zip, fit_p)
+# looic estimate for fit_zip 1402.6
+# looic estimate for fit_p 1570.1
+
+```
+Seems like `ZIP` better fit SIQ data because elpd_diff and se_diff was zero compared to `poisson`, and the model weight was slighlty higher for `ZIP` compared to `poisson`.
+
+### comparing ZIP and zero inflated neg binomial (ZIB)
+```{r, message=FALSE}
+lo_compare_zibandzip <- loo_compare(fit_zib, fit_zip, criterion = c("loo", "waic", "kfold"))
+
+print(lo_compare_zibandzip)
+#         elpd_diff se_diff
+# fit_zib    0.0       0.0 
+# fit_zip -366.3      90.3 
+
+model_weights(fit_zib, fit_zip)
+#   fit_zib      fit_zip 
+# 1.000000e+00 4.746838e-08  
+
+loo(fit_zib, fit_zip)
+```
+
+### comparing ZIB and negative binomial
+```{r, message=FALSE}
+lo_compare_zibandnb <- loo_compare(fit_nb, fit_zib, criterion = c("loo", "waic", "kfold"))
+
+print(lo_compare_zibandnb)
+#         elpd_diff se_diff
+# fit_nb   0.0       0.0   
+# fit_zib -0.9       0.5  
+
+model_weights(fit_nb, fit_zib)
+#       fit_nb      fit_zib 
+# 9.999993e-01 7.457582e-07 
+
+loo(fit_nb, fit_zib)
+```
+Seems like `NB` better fit SIQ data because elpd_diff and se_diff was zero compared to `ZIB`, and the model weight was higher for `NB` compared to `NB`.
+
+# tranforming suicidal ideation data to see if I can use gaussian distribution
+```{r}
+library(dlookr)
+siq_z <- siq_graph %>% 
+  mutate(siq_minmax = transform(siq_graph$siq_total.T3, method = "minmax")) %>%
+  dplyr::select(siq_minmax) %>% 
+  boxplot()
+
+siq_log = transform(siq_graph$siq_total.T3, method = "log+1") # can't do log of 0, so doing log + 1
+summary(siq_log)
+plot(siq_log)
+
+siq_graph <- siq_graph %>%
+  mutate(
+    siq_total_log = transform(siq_graph$siq_total.T3, method = "log+1")
+  )
+
+siq_responses <- siq_graph %>%
+  dplyr::select(ELS_ID, siq_total.T3, siq_total_log)
+
+siq_t3_fp_new <- "~/Box/siq_t3_response.csv"
+write_csv(siq_responses, siq_t3_fp_new)
+```
+The normal distribution looks pretty good.
+
+# data viz
+```{r}
+sum <- siq_graph %>%
+  dplyr::select(ELS_ID, siq_total.T3, siq_total_log) %>%
+  summarize(
+    siq_mean_log = mean(siq_total_log),
+    siq_med_log = median(siq_total_log),
+    siq_sd_log = sd(siq_total_log),
+    siq_min_log = min(siq_total_log),
+    siq_max_log = max(siq_total_log),
+    siq_mean = mean(siq_total.T3),
+    siq_med = median(siq_total.T3),
+    siq_sd = sd(siq_total.T3),
+    siq_min = min(siq_total.T3),
+    siq_max = max(siq_total.T3)
+  )
+siq_graph_plot_log <- siq_graph %>% 
+ dplyr::select(ELS_ID, siq_total_log) %>%
+  ggplot(.,
+         aes(x=siq_total_log)) +
+  geom_histogram(binwidth = .5, position = "identity", alpha = .5) +
+  scale_x_continuous(breaks = seq(from = 0, to = 5, by = 1), 
+                     name = "SIQ Scores") +
+  scale_y_continuous(breaks = seq(from = 0, to = 20, by = 5)) +
+  ggtitle("Distribution of suicidal ideation") +
+  theme_light()
+ggsave("siq_graph.jpg", siq_graph_plot, width = 7, height = 5)
+```
+
+###  gaussian
+```{r, message=FALSE}
+
+fit_m <- brm(siq_total_log ~ 1, data = siq_graph, family = gaussian())
+summary(fit_m)
+fit_m <- add_criterion(fit_m, c("loo", "kfold", "waic"), reloo = TRUE)
+l_fit_m <- loo(fit_m, save_psis = TRUE, k_threshold = 0.7)
+plot(l_fit_m, diagnotic="k")
+print(l_fit_m)
+plot(fit_m)
+pp_check(fit_m)
+```
+
+```{r}
+library(tidybayes)
+
+# add_residual_draws() gives us draws from the posterior distribution for each residual:
+siq_graph %>%
+  add_residual_draws(fit_m) %>%
+  ggplot(aes(x = .row, y = .residual)) +
+  stat_pointinterval()
+```
+
+residual plot
+```{r}
+# QQ plot:
+siq_graph %>%
+  add_residual_draws(fit_m) %>%
+  median_qi() %>%
+  ggplot(aes(sample = .residual)) +
+  geom_qq() +
+  geom_qq_line()
+```
+
+__Summary__
+Looks like the log-transformed siq data looks pretty normal. will use this for the lasso.
+

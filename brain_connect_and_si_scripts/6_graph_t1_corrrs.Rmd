@@ -1,0 +1,273 @@
+---
+title: "graph_t1_corrrs"
+author: "Jackie"
+date: "5/24/2020"
+output: html_notebook
+---
+
+Understanding correlations among local graph metrics (5)
+
+# Loading libraries
+```{r,echo=FALSE,results='hide',message=FALSE}
+library(tidyverse)
+library(haven)
+library(modelr)
+library(readxl)
+library(Rcpp)
+library(httpuv)
+library(shiny)
+library(plotly)
+library(corrr)
+library(seriation)
+library(d3heatmap)
+library(heatmaply)
+library(corrplot)
+```
+
+# Read in data
+
+### filepaths
+```{r, echo=FALSE,results='hide', message=FALSE}
+degree_fp <- "~/Box/deg_aucs.csv"
+effic_loc_fp <- "~/Box/eff_loc_aucs.csv"
+eig_cent_fp <- "~/Box/eig_cent_aucs.csv"
+part_coeff_fp <- "~/Box/pc_aucs.csv"
+within_mod_zscore_fp <- "~/Box/wm_z_aucs.csv"
+```
+
+## reading in
+```{r, echo=FALSE,results='hide',message=FALSE}
+
+degree <- read_csv(degree_fp) %>%
+  mutate(ELS_ID = factor(ELS_ID))
+effic_loc <- read_csv(effic_loc_fp) %>%
+  mutate(ELS_ID = factor(ELS_ID))
+eig_cent <- read_csv(eig_cent_fp) %>%
+  mutate(ELS_ID = factor(ELS_ID))
+part_coeff <- read_csv(part_coeff_fp) %>%
+  mutate(ELS_ID = factor(ELS_ID))
+within_mod_zscore <- read_csv(within_mod_zscore_fp) %>%
+  mutate(ELS_ID = factor(ELS_ID))
+```
+
+# joining dataframes
+```{r,echo=FALSE,results='hide'}
+graph_all <-
+  left_join(
+    effic_loc,
+    degree,
+    by = "ELS_ID"
+  )
+graph_all <-
+  left_join(
+    graph_all,
+    eig_cent,
+    by = "ELS_ID"
+  )
+graph_all <-
+  left_join(
+    graph_all,
+    part_coeff,
+    by = "ELS_ID"
+  )
+graph_all <-
+  left_join(
+    graph_all,
+    within_mod_zscore,
+    by = "ELS_ID"
+  ) %>%
+  filter(ELS_ID != "8")
+  
+```
+
+## write csv
+```{r}
+graph_all_fp <- "~/Box/graph_all.csv"
+write_csv(graph_all, graph_all_fp)
+```
+
+# Correlatons within each metric
+__more local properties__  
+__degree:__ _num of edges connected to a node_  
+__local efficiency:__ _global efficiency computed on node neighborhoods;_     
+_reflects efficient information transfer in the immediate neighborhood of each node;_      
+_how well information is exchanged by a node’s neghbors when it is removed_  
+__eigenvector centrality:__ _determines relative importance of nodes_  
+__within-mod z score:__ _z socre of a node's within-module degree; z-scores_    
+_greater than 2.5 denote hub status_
+__participation coefficient:__ _hubs refer to nodes with high nodal centrality_  
+_If a node's edges are entirley restricted to its community, it's pc is zero._  
+_Lower pc values indicate provincial hub status._
+_If the node's edges are evenely distributed among all communityes, the pc increases._  
+_Higher pc values indicate connector hub status._  
+
+## degree
+```{r degree}
+deg_roi_aucs_cor <- 
+  graph_all %>%
+  select(
+    ends_with("deg")
+    ) %>%
+  cor()
+
+deg_cor_tbl <- 
+  graph_all %>%
+  select(
+    ends_with("deg")
+  ) %>% 
+  correlate(use = "complete.obs", method = "spearman") %>% 
+  fashion()
+deg_cor_tbl
+
+#d3heatmap(deg_roi_aucs, scale = "column", hclustfun = hclust, dendrogram = "none")
+png(height=2000, width=2000, file="deg_corrplot.png")
+corrplot(deg_roi_aucs_cor, 
+         method = "color",
+         order = "hclust", 
+         tl.cex = .6, 
+         tl.col = "black",
+         type = "upper")
+dev.off()
+
+```
+
+## local efficiency
+```{r loc eff}
+loc_eff_roi_aucs_cor <- 
+  graph_all %>%
+  select(
+    ends_with("eff_loc")
+    ) %>%
+  cor()
+
+loc_eff_cor_tbl <- 
+  graph_all %>%
+  select(
+    ends_with("eff_loc")
+  ) %>% 
+  correlate(use = "complete.obs", method = "spearman") %>% 
+  fashion()
+loc_eff_cor_tbl
+
+png(height=2000, width=2000, file="loceff_corrplot.png")
+corrplot(loc_eff_roi_aucs_cor, method = "color",
+         order = "hclust",
+         tl.cex = .6, 
+         tl.col = "black", 
+         type = "upper")
+dev.off()
+```
+
+## eigenvector centrality
+```{r eig cent}
+eig_cent_roi_aucs_cor <- 
+  graph_all %>%
+  select(
+    ends_with("eig_cent")
+    ) %>%
+  cor()
+
+eig_cent_cor_tbl <- 
+  graph_all %>%
+  select(
+    ends_with("eig_cent")
+  ) %>% 
+  correlate(use = "complete.obs", method = "spearman") %>% 
+  fashion()
+eig_cent_cor_tbl
+
+png(height=2000, width=2000, file="eigcent_corrplot.png")
+corrplot(eig_cent_roi_aucs_cor, 
+         method = "color",
+         order = "hclust",
+         tl.cex = .6, 
+         tl.col = "black", 
+         type = "upper")
+dev.off()
+```
+
+## within module z score 
+```{r within mod}
+wm_z_aucs_cor <- 
+  graph_all %>%
+  select(
+    ends_with("wm_z")
+    ) %>%
+  cor()
+
+wm_z_cor_tbl <- 
+  graph_all %>%
+  select(
+    ends_with("wm_z")
+  ) %>% 
+  correlate(use = "complete.obs", method = "spearman") %>% 
+  fashion()
+wm_z_cor_tbl
+
+png(height=2000, width=2000, file="wm_z_corrplot.png")
+corrplot(wm_z_aucs_cor, 
+         method = "color",
+         order = "hclust",
+         tl.cex = .6, 
+         tl.col = "black", 
+         type = "upper")
+dev.off()
+```
+
+## participation coefficient 
+```{r part coeff}
+pc_aucs_cor <- 
+  graph_all %>%
+  select(
+    ends_with("pc")
+    ) %>%
+  cor()
+
+pc_cor_tbl <- 
+  graph_all %>%
+  select(
+    ends_with("pc")
+  ) %>% 
+  correlate(use = "complete.obs", method = "spearman") %>% 
+  fashion()
+pc_cor_tbl
+
+png(height=2000, width=2000, file="pc_corrplot.png")
+corrplot(pc_aucs_cor, 
+         method = "color",
+         order = "hclust",
+         tl.cex = .6, 
+         tl.col = "black", 
+         type = "upper")
+dev.off()
+```
+
+
+# correlation matrix among all variables
+```{r}
+aucs_cor <- 
+  graph_all %>%
+  select(-ELS_ID) %>%
+  cor()
+
+cor_tbl <- 
+  graph_all %>%
+  select(-ELS_ID) %>% 
+  correlate(use = "complete.obs", method = "spearman") %>% 
+  fashion()
+cor_tbl
+
+png(height=2000, width=2000, file="all_corrplot.png")
+corrplot(aucs_cor, 
+         diag = FALSE,
+         insig = "blank",
+         method = "color",
+         order = "FPC",
+         tl.pos = "td",
+         tl.cex = .1, 
+         tl.col = "black", 
+         tl.offset = .6,
+         type = "upper")
+dev.off()
+```
+
