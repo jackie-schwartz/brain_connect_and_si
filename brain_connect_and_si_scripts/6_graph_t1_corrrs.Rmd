@@ -1,7 +1,7 @@
 ---
 title: "graph_t1_corrrs"
 author: "Jackie"
-date: "5/24/2020"
+date: "10/22/2020"
 output: html_notebook
 ---
 
@@ -28,11 +28,11 @@ library(corrplot)
 
 ### filepaths
 ```{r, echo=FALSE,results='hide', message=FALSE}
-degree_fp <- "~/Box/deg_aucs.csv"
-effic_loc_fp <- "~/Box/eff_loc_aucs.csv"
-eig_cent_fp <- "~/Box/eig_cent_aucs.csv"
-part_coeff_fp <- "~/Box/pc_aucs.csv"
-within_mod_zscore_fp <- "~/Box/wm_z_aucs.csv"
+degree_fp <- "~/Box/Mooddata_Coordinating/1_Lab_Coordinating/Users/JackieSchwartz/PHIND_RS_and_Suicide/Octo2020Analysis/deg_aucs.csv"
+effic_loc_fp <- "~/Box/Mooddata_Coordinating/1_Lab_Coordinating/Users/JackieSchwartz/PHIND_RS_and_Suicide/Octo2020Analysis/eff_loc_aucs.csv"
+eig_cent_fp <- "~/Box/Mooddata_Coordinating/1_Lab_Coordinating/Users/JackieSchwartz/PHIND_RS_and_Suicide/Octo2020Analysis/eig_cent_aucs.csv"
+part_coeff_fp <- "~/Box/Mooddata_Coordinating/1_Lab_Coordinating/Users/JackieSchwartz/PHIND_RS_and_Suicide/Octo2020Analysis/pc_aucs.csv"
+within_mod_zscore_fp <- "~/Box/Mooddata_Coordinating/1_Lab_Coordinating/Users/JackieSchwartz/PHIND_RS_and_Suicide/Octo2020Analysis/wm_z_aucs.csv"
 ```
 
 ## reading in
@@ -80,12 +80,43 @@ graph_all <-
   
 ```
 
-## write csv
+
+unusable data including signal dropout - 6, 35, 173, 63, 173, 199, 211, 180
+
+withdrew - 7, 8, 200
+
+no scan - 27, 44, 52, 66, 71, 78, 82, 84, 94, 96, 105, 128, 131, 133, 141, 177, 190, 198, 203, 206, 207, 209
+
+motion flagged - 11, 20, 43, 80, 130, 149, 216, 194
+
 ```{r}
-graph_all_fp <- "~/Box/graph_all.csv"
-write_csv(graph_all, graph_all_fp)
+sigdrpout <- factor(c("6", "35", "173", "63", "173", "199", "211", "180"))
+witdrew <- factor(c("7", "8", "200"))
+motflagged <- factor(c("11", "20", "43", "80", "130", "149", "216", "194"))
+graph_all_filt <- 
+  graph_all %>%
+  mutate(
+    signaldrop = ifelse(ELS_ID %in% sigdrpout, 1, 0),
+    withdrew = ifelse(ELS_ID %in% witdrew, 1, 0),
+    mot = ifelse(ELS_ID %in% motflagged, 1, 0),
+    drop = ifelse(signaldrop == 1 | withdrew == 1 | mot == 1,
+                  1,
+                  0)
+  ) %>%
+  dplyr::select(ELS_ID, signaldrop, withdrew, mot, drop, everything())
+
+graph_all_filt_final <- 
+  graph_all_filt %>%
+  filter(drop == 0) %>%
+  dplyr::select(-signaldrop, -withdrew, -mot, -drop)
+  
 ```
 
+## write csv
+```{r}
+graph_all_fp <- "~/Box/Mooddata_Coordinating/1_Lab_Coordinating/Users/JackieSchwartz/PHIND_RS_and_Suicide/Octo2020Analysis/graph_all.csv"
+write_csv(graph_all_filt_final, graph_all_fp)
+```
 # Correlatons within each metric
 __more local properties__  
 __degree:__ _num of edges connected to a node_  

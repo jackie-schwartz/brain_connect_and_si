@@ -1,0 +1,226 @@
+---
+title: "11_glmnet_102020_sensitivity"
+author: "Jackie"
+date: "10/26/2020"
+output:
+  word_document: default
+  html_notebook: default
+  html_document:
+    df_print: paged
+---
+
+```{r, message=FALSE}
+library(glmnet)
+library(glmpath)
+library(lars)
+library(tidyverse)
+library(dynutils)
+library(readxl)
+library(haven)
+library(naniar)
+library(pscl)
+library(MASS)
+library(stringr)
+library(sjPlot)
+library(directlabels)
+library(caret)
+
+set.seed(1234)
+```
+
+```{r, message=FALSE}
+graph_net_fp <- "~/Box/Mooddata_Coordinating/1_Lab_Coordinating/Users/JackieSchwartz/PHIND_RS_and_Suicide/Octo2020Analysis/siq_graph.csv"
+
+graph_net <- read_csv(graph_net_fp)
+```
+
+```{r}
+options(scipen=999) 
+z_score <- function(x) {
+diff_mu <- x - mean(x, na.rm = T)
+sd <- sd(x, na.rm = T)
+diff_mu / sd
+}
+```
+
+## de-selecting variables
+```{r}
+graph_net_select <- graph_net %>%
+  dplyr::select(-c(siq_total.T3, T3_YSR_New_Internalizing_Problems_Total_Score))
+```
+
+#### recoding and standardizing
+```{r}
+
+graph_net_stand <- graph_net_select %>%
+  # converting race/ethinicity to factor and binarizing for analysis
+  mutate(KSADS_Child_Race_by_P.T1 = factor(KSADS_Child_Race_by_P.T1),
+         KSADS_Child_Race_by_P.T1_bin = ifelse(KSADS_Child_Race_by_P.T1 == "1", "1", "0"),
+         # converting sex to factor
+         sex_child = factor(sex_child),
+         meds_baseline = factor(meds_baseline)) %>%
+  # removing orig variable
+  dplyr::select(-KSADS_Child_Race_by_P.T1) %>%
+  # z-scoring siq
+  mutate(siq_total_log_z = z_score(siq_total_log)) %>%
+  # z-scoring all numeric variables
+  mutate_at(vars(-ELS_ID, -siq_total_log, -KSADS_Child_Race_by_P.T1_bin, -sex_child, -T1_KSADS_C_or_P_Thoughts, -T1_KSADS_C_or_P_bx, -meds_baseline), z_score) %>%
+  # arranging with ELS_ID first, then siq, then everything else
+  dplyr::select(ELS_ID, siq_total_log_z, siq_total_log, everything())
+
+
+graph_net_stand_fp <- "~/Box/Mooddata_Coordinating/1_Lab_Coordinating/Users/JackieSchwartz/PHIND_RS_and_Suicide/Octo2020Analysis/siq_graph_net_stand.csv"
+
+graph_net <- write_csv(graph_net_stand, graph_net_stand_fp)
+```
+
+
+## removing participants with previous threshold level STBs
+```{r}
+graph_net_stand_filt <- 
+  graph_net_stand %>%
+  # removing race/ethnicity to look at separately and the temporal follow-up variables
+  dplyr::select(-KSADS_Child_Race_by_P.T1_bin,  -Age_S1.T3, -Tanner_Average.T3) %>%
+  dplyr::select(ELS_ID, siq_total_log_z, T1_KSADS_C_or_P_Thoughts, T1_KSADS_C_or_P_bx, everything())
+
+# previous STBs already filtered
+
+```
+
+```{r}
+supp_graph_net_stand_siq <- graph_net_stand_filt %>%
+  dplyr::select(-ELS_ID, -T1_KSADS_C_or_P_Thoughts, -T1_KSADS_C_or_P_bx, -siq_total_log, -meds_baseline) %>%
+  dplyr::select(siq_total_log_z, everything()) # response (dv) variable in first column
+
+#as.matrix
+supp_predictors_scaled <- data.matrix(supp_graph_net_stand_siq[2:1261]) # columns 2 - 1260 are predictors
+supp_siq_scaled <-supp_graph_net_stand_siq$siq_total_log_z # my response variable
+```
+
+## to get sense of coefficient path
+```{r}
+# if i want to UN-penalize variable (e.g., framewise displacement)
+# supp_p.fac = rep(1, 1259)
+# supp_p.fac[c(1259)] = 0
+
+supp_lasso <- glmnet(supp_predictors_scaled, supp_siq_scaled, family = "gaussian", alpha = 1)
+
+plot(supp_lasso, xvar = "dev", label = TRUE)
+```
+
+okkayy so seems like 80/20 split on such a small sample is not wise. After speaking with Trevor H. suggested LOOCV, which actually minimizes simulation error and bias (avoiding randomness in the fold), and you're predicting the observation that wasn't used to fit the model.
+
+### setting up folds
+```{r}
+set.seed(1234)
+# We will use LOOCV to avoid randomness in folds
+
+k <- supp_graph_net_stand_siq %>% nrow() # k is equal to num of obs
+k
+```
+
+
+```{r}
+# conducting cross validated glmnet on whole sample using LOOCV
+cv_model_loocv <- cv.glmnet(x = supp_predictors_scaled,
+                            y = supp_siq_scaled,
+                            family = "gaussian",
+                            grouped = FALSE,
+                            nfolds = k)
+
+# computing RSquared value
+# supp_predictors_scaled is my x matrix
+# supp_siq_scaled is my y
+X <- model.matrix(siq_total_log_z ~ ., data = supp_graph_net_stand_siq)[,-1]
+# predict
+y_hat <- predict(cv_model_loocv,  newx = X,  s = "lambda.min")
+# R-Squared
+r_sq <- 1 - (sum((supp_siq_scaled - y_hat)^2) / sum((supp_siq_scaled - mean(supp_siq_scaled))^2))
+r_sq
+
+
+## extracting coefficients
+cv_model_loocv$lambda.min # 0.1863286
+options(max.print = 1265)
+coef_loocv <- coef(cv_model_loocv, s = "lambda.min")
+```
+
+### plotting the loocv lasso coefficients
+```{r}
+siq_loocv_lasso_coef <- read_excel("tbl3toPlot.xlsx", sheet = "siq")
+```
+
+```{r}
+siq_lasso_results <- siq_loocv_lasso_coef %>%
+  ggplot(
+    aes(
+      x = reorder(Variable, sibetavalue),
+      y = sibetavalue,
+      fill = Lobe
+    )
+  ) + 
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  labs(x = "Variable", y = "SI Beta Value") +
+  ggtitle("Predictors of Suicidal Ideation") +
+  theme_blank() +
+  scale_fill_brewer(palette="Set2")
+
+ggsave("siq_lasso_results.jpg", siq_lasso_results, width = 7, height = 5)
+```
+
+# sensitivity analysis
+
+filtering those who reported medication usage
+
+```{r}
+supp_graph_net_stand_siq_sens <- graph_net_stand_filt %>%
+  filter(meds_baseline == "0") %>%
+  dplyr::select(-ELS_ID, -T1_KSADS_C_or_P_Thoughts, -T1_KSADS_C_or_P_bx, -siq_total_log, -meds_baseline) %>%
+  dplyr::select(siq_total_log_z, everything()) # response (dv) variable in first column
+
+#as.matrix
+supp_predictors_scaled_sens <- data.matrix(supp_graph_net_stand_siq_sens[2:1261]) # columns 2 - 1260 are predictors
+supp_siq_scaled_sens <-supp_graph_net_stand_siq_sens$siq_total_log_z # my response variable
+```
+
+### to get sense of coefficient path
+```{r}
+supp_lasso_sens <- glmnet(supp_predictors_scaled_sens, supp_siq_scaled_sens, family = "gaussian", alpha = 1)
+
+plot(supp_lasso_sens, xvar = "dev", label = TRUE)
+```
+
+#### setting up folds
+```{r}
+set.seed(1234)
+# We will use LOOCV to avoid randomness in folds
+
+k_sens <- supp_graph_net_stand_siq_sens %>% nrow() # k is equal to num of obs
+k_sens
+```
+
+
+```{r}
+# conducting cross validated glmnet on whole sample using LOOCV
+cv_model_loocv_sens <- cv.glmnet(x = supp_predictors_scaled_sens,
+                            y = supp_siq_scaled_sens,
+                            family = "gaussian",
+                            grouped = FALSE,
+                            nfolds = k_sens)
+
+X_sens <- model.matrix(siq_total_log_z ~ ., data = supp_graph_net_stand_siq_sens)[,-1]
+# predict
+y_hat_sens <- predict(cv_model_loocv_sens,  newx = X_sens,  s = "lambda.min")
+# R-Squared
+r_sq_sens <- 1 - (sum((supp_siq_scaled_sens - y_hat_sens)^2) / sum((supp_siq_scaled_sens - mean(supp_siq_scaled_sens))^2))
+r_sq_sens
+
+
+## extracting coefficients
+cv_model_loocv_sens$lambda.min # 0.1340022
+options(max.print = 1265)
+coef_loocv_sens <- coef(cv_model_loocv_sens, s = "lambda.min")
+```
+
+Coefficients largely consistent with primary analysis - lots of extra predictors.

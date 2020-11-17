@@ -1,3 +1,4 @@
 Folder Contents: 06/17/20
+Updated 11/16/20
 
-Scripts for paper looking at brain connectomics predicting suicidal ideation severity. The first 7 scripts wrangle graph metrics. Script 8 computes suicidal ideation severity scores (the response distribution) and log transforms this variable since it is positively skewed. Script 9 performs a lasso regression using glmnet, conducts hold-out cross-validation, and provides performance metrics. Script 10 performs a "seed-to-seed" analysis based on output from lasso.
+Scripts for paper looking at brain connectomics predicting suicidal ideation severity. The first 6 scripts wrangle graph metrics. Script 8 computes suicidal ideation severity scores (the response distribution) and log transforms this variable since it is positively skewed. Script 10 performs a lasso regression using glmnet and loocv. Script 11 conducts supplementary zero-order correlations.

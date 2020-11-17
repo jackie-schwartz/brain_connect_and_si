@@ -1,0 +1,225 @@
+---
+title: "10_glmnet_ysr_loocv_analysis"
+author: "Jackie"
+date: "11/10/2020"
+output: html_document
+---
+
+```{r, message=FALSE}
+library(glmnet)
+library(glmpath)
+library(lars)
+library(tidyverse)
+library(dynutils)
+library(readxl)
+library(haven)
+library(naniar)
+library(pscl)
+library(MASS)
+library(stringr)
+library(sjPlot)
+library(directlabels)
+library(caret)
+
+set.seed(1234)
+```
+
+```{r, message=FALSE, echo=FALSE}
+graph_net_fp <- "~/Box/Mooddata_Coordinating/1_Lab_Coordinating/Users/JackieSchwartz/PHIND_RS_and_Suicide/Octo2020Analysis/siq_graph.csv"
+
+
+ysr_t1_old_fp <- "~/Box/mooddata_nophi/ELS_RDoC/T1 DATA/ELS T1 Questionnaires/T1 ASR, YSR, CBCL/YSR Data/Scored/Old 1991 Version/ELS_T1S1_YSR_Old_Final_Profile_Data.csv"
+# internalizing:  T1_YSR_old_Withdrawn_Total_Score, T1_YSR_old_Somatic_Complaints_Total_Score, T1_YSR_old_AnxiousDepressed_Total_Score
+
+
+ysr_t3_fp <- "~/Box/mooddata_nophi/ELS_RDoC/T3 DATA/ELS T3 Questionnaires/ELS T3 ASR, CBCL, YSR/Scored/YSR/New 2001 Version/T3_YSR_NEW_2001_Final_Profile_Data.csv"
+# internalizing: T3_YSR_New_AnxiousDepressed_Total_Score, T3_YSR_New_WithdrawnDepressed_Total_Score, T3_YSR_New_Somatic_Complaints_Total_Score
+
+```
+
+```{r, message=FALSE, echo=FALSE}
+# ysr at t1
+ysrt1 <- read_csv(ysr_t1_old_fp) %>%
+  mutate(ELS_ID = factor(ELS_ID)
+         ) %>%
+  dplyr::select(ELS_ID, T1_YSR_old_Withdrawn_Total_Score, T1_YSR_old_Somatic_Complaints_Total_Score, T1_YSR_old_AnxiousDepressed_Total_Score)
+
+ysrt1_dup <- ysrt1 %>% filter(duplicated(ELS_ID))
+
+# ysr at t3
+ysrt3 <- read_csv(ysr_t3_fp) %>%
+  mutate(ELS_ID = factor(ELS_ID)
+         ) %>%
+  dplyr::select(ELS_ID,Session_Type, T3_YSR_New_AnxiousDepressed_Total_Score, T3_YSR_New_WithdrawnDepressed_Total_Score, T3_YSR_New_Somatic_Complaints_Total_Score) %>%
+  replace_with_na(.,
+                  replace = list(
+                                 T3_YSR_New_AnxiousDepressed_Total_Score =
+                                   c("888", "999"),
+                                 T3_YSR_New_WithdrawnDepressed_Total_Score =
+                                   c("888", "999"),
+                                 T3_YSR_New_Somatic_Complaints_Total_Score = 
+                                   c("888", "999")
+                                 )
+  )
+
+ysrt3_dup <- ysrt3 %>% filter(duplicated(ELS_ID))
+
+ysrt3 <- ysrt3 %>%
+  filter(is.na(Session_Type)) %>%
+  dplyr::select(-Session_Type) %>%
+  drop_na(T3_YSR_New_Somatic_Complaints_Total_Score)
+```
+
+```{r, message=FALSE}
+siq_graph <- read_csv(graph_net_fp) %>%
+  mutate(ELS_ID = factor(ELS_ID)
+         )
+ysr_siq_graph <-
+  left_join(siq_graph, ysrt1, by = "ELS_ID")
+ysr_siq_graph <-
+  left_join(ysr_siq_graph, ysrt3, by = "ELS_ID")
+```
+
+### cronbach's alpha
+```{r}
+library(cocron)
+ysr_t1_alpha <- ysr_siq_graph %>%
+  dplyr::select(starts_with("T1_YSR")) %>%
+  dplyr::select(-T1_YSR_old_Internalizing_Problems_Total_Score)
+
+cronbach.alpha(ysr_t1_alpha, standardized = T)
+# alpha 
+# 0.8042493  
+
+ysr_t3_alpha <- ysr_siq_graph %>%
+  dplyr::select(starts_with("T3_YSR")) %>%
+  dplyr::select(-T3_YSR_New_Internalizing_Problems_Total_Score)
+
+cronbach.alpha(ysr_t3_alpha, standardized = T)
+# alpha 
+# 0.8223951  
+```
+
+
+```{r}
+options(scipen=999) 
+z_score <- function(x) {
+diff_mu <- x - mean(x, na.rm = T)
+sd <- sd(x, na.rm = T)
+diff_mu / sd
+}
+```
+
+
+```{r}
+library(dlookr)
+ysr_z <- ysr_siq_graph %>% 
+  mutate(ysr_minmax = transform(ysr_siq_graph$T3_YSR_New_Internalizing_Problems_Total_Score, method = "minmax")) %>%
+  dplyr::select(ysr_minmax) %>% 
+  boxplot()
+
+ysr_log = transform(ysr_siq_graph$T3_YSR_New_Internalizing_Problems_Total_Score, method = "log") # can't do log of 0, so doing log + 1
+summary(ysr_log)
+plot(ysr_log) 
+# no need to log transform ysr - skewness and kurtosis are decent
+```
+
+
+# selecting variables
+```{r}
+ysr_siq_graph_select <-
+  ysr_siq_graph %>%
+  # converting race/ethinicity to factor and binarizing for analysis
+    mutate(KSADS_Child_Race_by_P.T1 = factor(KSADS_Child_Race_by_P.T1),
+         KSADS_Child_Race_by_P.T1_bin = ifelse(KSADS_Child_Race_by_P.T1 == "1", "1", "0"),
+         # converting sex to factor
+         sex_child = factor(sex_child)) %>%
+  # removing orig race/eth variable, temporal follow-up variables, ysr subscales
+  dplyr::select(-KSADS_Child_Race_by_P.T1, -siq_total_log, -siq_total.T3, -KSADS_Child_Race_by_P.T1_bin,  -Age_S1.T3, -Tanner_Average.T3, -KSADS_Child_Race_by_P.T1_bin,  -T1_KSADS_C_or_P_Thoughts, -T1_KSADS_C_or_P_bx, -T1_YSR_old_Withdrawn_Total_Score, -T1_YSR_old_Somatic_Complaints_Total_Score, -T1_YSR_old_AnxiousDepressed_Total_Score, -T3_YSR_New_AnxiousDepressed_Total_Score, -T3_YSR_New_WithdrawnDepressed_Total_Score, -T3_YSR_New_Somatic_Complaints_Total_Score) %>%
+  # z-scoring follow-up ysr 
+  mutate(T3_YSR_New_Internalizing_Problems_Total_Score_z = z_score(T3_YSR_New_Internalizing_Problems_Total_Score)) %>%
+  # z-scoring the other numeric variables
+  mutate_at(vars(-ELS_ID, -sex_child), z_score) %>%
+  # selecting our dv (follow-up ysr, baseline ysr, and everything else)
+  dplyr::select(ELS_ID, T3_YSR_New_Internalizing_Problems_Total_Score_z, T1_YSR_old_Internalizing_Problems_Total_Score, everything()) %>%
+  # de-selecting the non-zscored follow-up ysr score
+  dplyr::select(-T3_YSR_New_Internalizing_Problems_Total_Score, -ELS_ID)
+```
+
+```{r}
+#as.matrix
+
+ysr_predictors_scaled <- data.matrix(ysr_siq_graph_select[2:1261]) # columns 2 - 1261 are predictors
+ysr_scaled <- ysr_siq_graph_select$T3_YSR_New_Internalizing_Problems_Total_Score_z # my response variable
+```
+
+## to get sense of coefficient path
+```{r}
+# if i want to UN-penalize variable (e.g., framewise displacement)
+# supp_p.fac = rep(1, 1259)
+# supp_p.fac[c(1259)] = 0
+
+ysr_lasso <- glmnet(ysr_predictors_scaled, ysr_scaled, family = "gaussian", alpha = 1)
+
+plot(ysr_lasso, xvar = "dev", label = TRUE)
+```
+
+
+### setting up folds
+```{r}
+set.seed(1234)
+# We will use LOOCV to avoid randomness in folds
+
+k <- ysr_siq_graph_select %>% nrow() # k is equal to num of obs
+k
+```
+
+```{r}
+# conducting cross validated glmnet on whole sample using LOOCV
+ysr_cv_model_loocv <- cv.glmnet(x = ysr_predictors_scaled,
+                            y = ysr_scaled,
+                            family = "gaussian",
+                            grouped = FALSE,
+                            nfolds = k)
+
+# computing RSquared value
+# ysr_predictors_scaled is my x matrix
+# ysr_scaled is my y
+ysr_X <- model.matrix(T3_YSR_New_Internalizing_Problems_Total_Score_z ~ ., data = ysr_siq_graph_select)[,-1]
+# predict
+ysr_y_hat <- predict(ysr_cv_model_loocv,  newx = ysr_X,  s = "lambda.min")
+# R-Squared
+ysr_r_sq <- 1 - (sum((ysr_scaled - ysr_y_hat)^2) / sum((ysr_scaled - mean(ysr_scaled))^2))
+ysr_r_sq # 0.1861916
+
+
+## extracting coefficients
+ysr_cv_model_loocv$lambda.min # 0.201221
+options(max.print = 1265)
+ysr_coef_loocv <- coef(ysr_cv_model_loocv, s = "lambda.min")
+```
+
+
+## reading in beta estimates for plotting
+```{r}
+ysr_loocv_lasso_coef <- read_excel("tbl3toPlot.xlsx", sheet = "ysr")
+```
+
+```{r}
+ysr_lasso_results <- ysr_loocv_lasso_coef %>%
+  ggplot(
+    aes(
+      x = reorder(Variable, ysrbetavalue),
+      y = ysrbetavalue,
+      fill = Lobe
+    )
+  ) + 
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  labs(x = "Variable", y = "YSR Beta Value") +
+  ggtitle("Predictors of Internalizing Severity") +
+  theme_blank() +
+  scale_fill_brewer(palette="Set2")
+
+ggsave("ysr_lasso_results.jpg", ysr_lasso_results, width = 7, height = 5)
+```

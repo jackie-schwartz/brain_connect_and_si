@@ -1,11 +1,11 @@
 ---
-title: "graph_t1_part_coeff"
+title: "graph_t1_participation_coeff"
 author: "Jackie"
-date: "5/24/2020"
+date: "10/21/2020"
 output: html_notebook
 ---
 
-Computes AUC for participation coefficient (not normalized)
+Computes AUC for local efficiency (not normalized)
 
 # libraries
 ```{r}
@@ -20,8 +20,8 @@ library(plotly)
 ```
 
 # reading data
-```{r}
-pc_fp <- "~/Box/pc.xlsx"
+```{r message=FALSE}
+pc_fp <- "~/Box/Mooddata_Coordinating/1_Lab_Coordinating/Users/JackieSchwartz/PHIND_RS_and_Suicide/Octo2020Analysis/results/pc.xlsx"
 pc_th.1 <-
   read_excel(pc_fp, sheet = "pc_.1")
 pc_th.12 <-
@@ -78,48 +78,66 @@ pc_th.1 <-
   pc_th.1 %>%
   mutate(ELS_ID = 
   str_remove(ELS_ID, 
-             "CorrMatrix_sub-"
-             )
+             "_ses-T1_task-rest_space-MNIPediatricAsym_cohort-4_res-2-BrainnetomeTimeseries"
+             ),
+  ELS_ID =
+    str_remove(ELS_ID,
+               "sub-")
   ) %>%
   mutate(ELS_ID = as.numeric(ELS_ID))
 pc_th.12 <-
-  pc_th.12 %>%
+  pc_th.12  %>%
   mutate(ELS_ID = 
   str_remove(ELS_ID, 
-             "CorrMatrix_sub-"
-             )
+             "_ses-T1_task-rest_space-MNIPediatricAsym_cohort-4_res-2-BrainnetomeTimeseries"
+             ),
+  ELS_ID =
+    str_remove(ELS_ID,
+               "sub-")
   ) %>%
   mutate(ELS_ID = as.numeric(ELS_ID))
 pc_th.14 <-
-  pc_th.14 %>%
+  pc_th.14  %>%
   mutate(ELS_ID = 
   str_remove(ELS_ID, 
-             "CorrMatrix_sub-"
-             )
+             "_ses-T1_task-rest_space-MNIPediatricAsym_cohort-4_res-2-BrainnetomeTimeseries"
+             ),
+  ELS_ID =
+    str_remove(ELS_ID,
+               "sub-")
   ) %>%
   mutate(ELS_ID = as.numeric(ELS_ID))
 pc_th.16 <-
-  pc_th.16 %>%
+  pc_th.16  %>%
   mutate(ELS_ID = 
   str_remove(ELS_ID, 
-             "CorrMatrix_sub-"
-             )
+             "_ses-T1_task-rest_space-MNIPediatricAsym_cohort-4_res-2-BrainnetomeTimeseries"
+             ),
+  ELS_ID =
+    str_remove(ELS_ID,
+               "sub-")
   ) %>%
   mutate(ELS_ID = as.numeric(ELS_ID))
 pc_th.18 <-
-  pc_th.18 %>%
+  pc_th.18  %>%
   mutate(ELS_ID = 
   str_remove(ELS_ID, 
-             "CorrMatrix_sub-"
-             )
+             "_ses-T1_task-rest_space-MNIPediatricAsym_cohort-4_res-2-BrainnetomeTimeseries"
+             ),
+  ELS_ID =
+    str_remove(ELS_ID,
+               "sub-")
   ) %>%
   mutate(ELS_ID = as.numeric(ELS_ID))
 pc_th.2 <-
-  pc_th.2 %>%
+  pc_th.2  %>%
   mutate(ELS_ID = 
   str_remove(ELS_ID, 
-             "CorrMatrix_sub-"
-             )
+             "_ses-T1_task-rest_space-MNIPediatricAsym_cohort-4_res-2-BrainnetomeTimeseries"
+             ),
+  ELS_ID =
+    str_remove(ELS_ID,
+               "sub-")
   ) %>%
   mutate(ELS_ID = as.numeric(ELS_ID))
 ```
@@ -152,50 +170,196 @@ pc_th.2 <-
   mutate(ELS_ID = as.factor(ELS_ID))
 ```
 
+## renaming variables
+```{r}
+bg_rois_fp <- "~/Box/Mooddata_Coordinating/1_Lab_Coordinating/Users/JackieSchwartz/PHIND_RS_and_Suicide/Octo2020Analysis/bn_timeser_102020/BrainRegions_Brainnetome_250_wBG_rc.xlsx"
+bg_rois <- read_excel(bg_rois_fp, col_names = FALSE)
+
+bg_rois <-
+  bg_rois %>%
+  rename(
+    "keep" = "...1",
+    "roi" = "...2",
+    "bg_name" = "...3",
+    "x" = "...4",
+    "y" = "...5",
+    "z" = "...6"
+  )
+
+old_names <- bg_rois$bg_name
+oldnames_ch <- dput(as.character(old_names))
+new_names <- bg_rois$roi
+newnames_ch <- dput(as.character(new_names))
+
+```
+
+### renaming local efficiency
+```{r}
+#loc eff th.1
+pc_th.1_long <- 
+  pc_th.1 %>%
+  gather(oldroi_name,pc_value, A8mL:lPFthaR) %>%
+  mutate(oldroi_name = factor(oldroi_name))
+
+pc_th.1_long_rename <-
+  pc_th.1_long %>%
+  mutate(
+    newroi_name =
+  do.call(fct_recode,
+    c(list(oldroi_name), setNames(c(oldnames_ch),c(newnames_ch)))
+    )
+  )
+
+pc_th.1_wide <-
+  pc_th.1_long_rename %>%
+  dplyr::select(ELS_ID, newroi_name, pc_value) %>%
+  spread(newroi_name, pc_value)
+
+#loc eff th.12
+pc_th.12_long <- 
+  pc_th.12 %>%
+  gather(oldroi_name,pc_value, A8mL:lPFthaR) %>%
+  mutate(oldroi_name = factor(oldroi_name))
+
+pc_th.12_long_rename <-
+  pc_th.12_long %>%
+  mutate(
+    newroi_name =
+  do.call(fct_recode,
+    c(list(oldroi_name), setNames(c(oldnames_ch),c(newnames_ch)))
+    )
+  )
+
+pc_th.12_wide <-
+  pc_th.12_long_rename %>%
+  dplyr::select(ELS_ID, newroi_name, pc_value) %>%
+  spread(newroi_name, pc_value)
+
+#loc eff th.14
+pc_th.14_long <- 
+  pc_th.14 %>%
+  gather(oldroi_name,pc_value, A8mL:lPFthaR) %>%
+  mutate(oldroi_name = factor(oldroi_name))
+
+pc_th.14_long_rename <-
+  pc_th.14_long %>%
+  mutate(
+    newroi_name =
+  do.call(fct_recode,
+    c(list(oldroi_name), setNames(c(oldnames_ch),c(newnames_ch)))
+    )
+  )
+
+pc_th.14_wide <-
+  pc_th.14_long_rename %>%
+  dplyr::select(ELS_ID, newroi_name, pc_value) %>%
+  spread(newroi_name, pc_value)
+
+#loc eff th.16
+pc_th.16_long <- 
+  pc_th.16 %>%
+  gather(oldroi_name,pc_value, A8mL:lPFthaR) %>%
+  mutate(oldroi_name = factor(oldroi_name))
+
+pc_th.16_long_rename <-
+  pc_th.16_long %>%
+  mutate(
+    newroi_name =
+  do.call(fct_recode,
+    c(list(oldroi_name), setNames(c(oldnames_ch),c(newnames_ch)))
+    )
+  )
+
+pc_th.16_wide <-
+  pc_th.16_long_rename %>%
+  dplyr::select(ELS_ID, newroi_name, pc_value) %>%
+  spread(newroi_name, pc_value)
+
+#loc eff th.18
+pc_th.18_long <- 
+  pc_th.18 %>%
+  gather(oldroi_name,pc_value, A8mL:lPFthaR) %>%
+  mutate(oldroi_name = factor(oldroi_name))
+
+pc_th.18_long_rename <-
+  pc_th.18_long %>%
+  mutate(
+    newroi_name =
+  do.call(fct_recode,
+    c(list(oldroi_name), setNames(c(oldnames_ch),c(newnames_ch)))
+    )
+  )
+
+pc_th.18_wide <-
+  pc_th.18_long_rename %>%
+  dplyr::select(ELS_ID, newroi_name, pc_value) %>%
+  spread(newroi_name, pc_value)
+
+#loc eff th.2
+pc_th.2_long <- 
+  pc_th.2 %>%
+  gather(oldroi_name,pc_value, A8mL:lPFthaR) %>%
+  mutate(oldroi_name = factor(oldroi_name))
+
+pc_th.2_long_rename <-
+  pc_th.2_long %>%
+  mutate(
+    newroi_name =
+  do.call(fct_recode,
+    c(list(oldroi_name), setNames(c(oldnames_ch),c(newnames_ch)))
+    )
+  )
+
+pc_th.2_wide <-
+  pc_th.2_long_rename %>%
+  dplyr::select(ELS_ID, newroi_name, pc_value) %>%
+  spread(newroi_name, pc_value)
+```
+
 # appending threshold values to each roi
 ```{r}
-pc_th.1 <-
-  pc_th.1 %>%
+pc_th.1_wide <-
+  pc_th.1_wide %>%
   rename_at(
     vars(-ELS_ID),
     function(x)
       paste0(x, "_.10")
     )
 
-pc_th.12 <-
-  pc_th.12 %>%
+pc_th.12_wide <-
+  pc_th.12_wide %>%
   rename_at(
     vars(-ELS_ID),
     function(x)
       paste0(x, "_.12")
     )
 
-pc_th.14 <-
-  pc_th.14 %>%
+pc_th.14_wide <-
+  pc_th.14_wide %>%
   rename_at(
     vars(-ELS_ID),
     function(x)
       paste0(x, "_.14")
     )
 
-pc_th.16 <-
-  pc_th.16 %>%
+pc_th.16_wide <-
+  pc_th.16_wide %>%
   rename_at(
     vars(-ELS_ID),
     function(x)
       paste0(x, "_.16")
     )
 
-pc_th.18 <-
-  pc_th.18 %>%
+pc_th.18_wide <-
+  pc_th.18_wide %>%
   rename_at(
     vars(-ELS_ID),
     function(x)
       paste0(x, "_.18")
     )
 
-pc_th.2 <-
-  pc_th.2 %>%
+pc_th.2_wide <-
+  pc_th.2_wide %>%
   rename_at(
     vars(-ELS_ID),
     function(x)
@@ -206,25 +370,25 @@ pc_th.2 <-
 # merging files
 ```{r}
 pc_all_thr <-
-  left_join(pc_th.1,
-            pc_th.12,
+  left_join(pc_th.1_wide,
+            pc_th.12_wide,
             by = "ELS_ID")
 pc_all_thr <-
   left_join(pc_all_thr,
-            pc_th.14,
+            pc_th.14_wide,
             by = "ELS_ID")
 pc_all_thr <-
   left_join(pc_all_thr,
-            pc_th.16,
+            pc_th.16_wide,
             by = "ELS_ID")
 pc_all_thr <-
   left_join(pc_all_thr,
-            pc_th.18,
+            pc_th.18_wide,
             by = "ELS_ID") %>%
   mutate(ELS_ID = factor(ELS_ID))
 pc_all_thr <-
   left_join(pc_all_thr,
-            pc_th.2,
+            pc_th.2_wide,
             by = "ELS_ID")
 ```
 
@@ -235,7 +399,7 @@ pc_all_thr_long <-
   pc_all_thr %>%
   group_by(ELS_ID) %>%
   gather(roi, pc_value, 
-         SFG_L_1_.10:lPFtha_R_252_.20) %>%
+         lMFG_L_27_.10:vmPu_R_230_.20) %>%
   separate(col = roi, c("roi", "thresh"), "[.]")
 # spread
 pc_all_thr_wide <-
@@ -244,7 +408,7 @@ pc_all_thr_wide <-
   mutate(roi = 
            str_sub(roi, 1, str_length(roi)-1)
   )
-  
+
 ```
 
 # viz
@@ -272,8 +436,8 @@ dist_x_labels <-
 ```
 
 
-```{r dist pc w thresh}
-# pc by threshold
+```{r dist degree w thresh}
+# degree by threshold
 dist_pc_by_thresh <- 
   pc_all_thr_long %>%
   mutate(
@@ -283,10 +447,7 @@ dist_pc_by_thresh <-
          aes(x=roi, y=pc_value)
          ) +
   geom_col(alpha = .5, position = "dodge") +
-  scale_y_continuous(
-    label = function(x) 
-      format(x, big.mark = ".", decimal.mark = ",") 
-  ) +
+  scale_y_continuous(labels = function(x) format(x, big.mark = ".", decimal.mark = ",")) +
   dist_plot +
   facet_wrap(~thresh,
              ncol = 2,
@@ -338,7 +499,7 @@ amyg <-
     roi = as.factor(roi)
   ) %>%
   filter(
-    str_detect(roi, "Amyg")
+    str_detect(roi, "Amyg_")
   )
 vca <- 
   pc_all_thr_wide %>%
@@ -346,7 +507,7 @@ vca <-
     roi = as.factor(roi)
   ) %>%
   filter(
-    str_detect(roi, "vC")
+    str_detect(roi, "vCA_")
   )
 gpe <- 
   pc_all_thr_wide %>%
@@ -354,7 +515,7 @@ gpe <-
     roi = as.factor(roi)
   ) %>%
   filter(
-    str_detect(roi, "Gpe")
+    str_detect(roi, "Gpe_")
   )
 gpi <- 
   pc_all_thr_wide %>%
@@ -362,7 +523,7 @@ gpi <-
     roi = as.factor(roi)
   ) %>%
   filter(
-    str_detect(roi, "Gpi")
+    str_detect(roi, "Gpi_")
   )
 vmpu <- 
   pc_all_thr_wide %>%
@@ -370,7 +531,7 @@ vmpu <-
     roi = as.factor(roi)
   ) %>%
   filter(
-    str_detect(roi, "vmP")
+    str_detect(roi, "vmPu_")
   )
 nac <- 
   pc_all_thr_wide %>%
@@ -378,7 +539,7 @@ nac <-
     roi = as.factor(roi)
   ) %>%
   filter(
-    str_detect(roi, "NAC")
+    str_detect(roi, "NAC_")
   )
 dca <- 
   pc_all_thr_wide %>%
@@ -386,7 +547,7 @@ dca <-
     roi = as.factor(roi)
   ) %>%
   filter(
-    str_detect(roi, "dC")
+    str_detect(roi, "dCa_")
   )
 dlpu <- 
   pc_all_thr_wide %>%
@@ -394,7 +555,7 @@ dlpu <-
     roi = as.factor(roi)
   ) %>%
   filter(
-    str_detect(roi, "dlPu")
+    str_detect(roi, "dlPu_")
   )
 cg <- 
   pc_all_thr_wide %>%
@@ -402,7 +563,7 @@ cg <-
     roi = as.factor(roi)
   ) %>%
   filter(
-    str_detect(roi,"CG")
+    str_detect(roi,"CG_")
   )
 fug <- 
   pc_all_thr_wide %>%
@@ -410,7 +571,7 @@ fug <-
     roi = as.factor(roi)
   ) %>%
   filter(
-    str_detect(roi,"FuG")
+    str_detect(roi,"FuG_")
   )
 hipp <- 
   pc_all_thr_wide %>%
@@ -418,7 +579,7 @@ hipp <-
     roi = as.factor(roi)
   ) %>%
   filter(
-    str_detect(roi,"Hipp")
+    str_detect(roi,"Hipp_")
   )
 ifg <- 
   pc_all_thr_wide %>%
@@ -426,7 +587,7 @@ ifg <-
     roi = as.factor(roi)
   ) %>%
   filter(
-    str_detect(roi,"IFG")
+    str_detect(roi,"IFG_")
   )
 ins <- 
   pc_all_thr_wide %>%
@@ -434,7 +595,7 @@ ins <-
     roi = as.factor(roi)
   ) %>%
   filter(
-    str_detect(roi,"INS")
+    str_detect(roi,"INS_")
   )
 ipl <- 
   pc_all_thr_wide %>%
@@ -442,7 +603,7 @@ ipl <-
     roi = as.factor(roi)
   ) %>%
   filter(
-    str_detect(roi,"IPL")
+    str_detect(roi,"IPL_")
   )
 itg <- 
   pc_all_thr_wide %>%
@@ -450,7 +611,7 @@ itg <-
     roi = as.factor(roi)
   ) %>%
   filter(
-    str_detect(roi,"ITG")
+    str_detect(roi,"ITG_")
   )
 locc <- 
   pc_all_thr_wide %>%
@@ -458,7 +619,7 @@ locc <-
     roi = as.factor(roi)
   ) %>%
   filter(
-    str_detect(roi,"LOcC")
+    str_detect(roi,"LOcC_")
   )
 mfg <- 
   pc_all_thr_wide %>%
@@ -466,15 +627,7 @@ mfg <-
     roi = as.factor(roi)
   ) %>%
   filter(
-    str_detect(roi,"MFG")
-  )
-locc <- 
-  pc_all_thr_wide %>%
-  mutate(
-    roi = as.factor(roi)
-  ) %>%
-  filter(
-    str_detect(roi,"LOcC")
+    str_detect(roi,"MFG_")
   )
 mtg <- 
   pc_all_thr_wide %>%
@@ -482,7 +635,7 @@ mtg <-
     roi = as.factor(roi)
   ) %>%
   filter(
-    str_detect(roi,"MTG")
+    str_detect(roi,"MTG_")
   )
 mvocc <- 
   pc_all_thr_wide %>%
@@ -490,7 +643,7 @@ mvocc <-
     roi = as.factor(roi)
   ) %>%
   filter(
-    str_detect(roi,"MVocC") 
+    str_detect(roi,"MVocC_") 
   )
 org <- 
   pc_all_thr_wide %>%
@@ -498,7 +651,7 @@ org <-
     roi = as.factor(roi)
   ) %>%
   filter(
-    str_detect(roi,"OrG")
+    str_detect(roi,"OrG_")
   )
 pcl <- 
   pc_all_thr_wide %>%
@@ -506,7 +659,7 @@ pcl <-
     roi = as.factor(roi)
   ) %>%
   filter(
-    str_detect(roi,"PCL")
+    str_detect(roi,"PCL_")
   )
 pcun <- 
   pc_all_thr_wide %>%
@@ -514,7 +667,7 @@ pcun <-
     roi = as.factor(roi)
   ) %>%
   filter(
-    str_detect(roi,"Pcun")
+    str_detect(roi,"Pcun_")
   )
 phg <- 
   pc_all_thr_wide %>%
@@ -522,7 +675,7 @@ phg <-
     roi = as.factor(roi)
   ) %>%
   filter(
-    str_detect(roi,"PhG")
+    str_detect(roi,"PhG_")
   )
 pog <- 
   pc_all_thr_wide %>%
@@ -530,7 +683,7 @@ pog <-
     roi = as.factor(roi)
   ) %>%
   filter(
-   str_detect(roi,"PoG")
+   str_detect(roi,"PoG_")
   )
 prg <- 
   pc_all_thr_wide %>%
@@ -538,7 +691,7 @@ prg <-
     roi = as.factor(roi)
   ) %>%
   filter(
-    str_detect(roi,"PrG")
+    str_detect(roi,"PrG_")
   )
 psts <- 
   pc_all_thr_wide %>%
@@ -546,7 +699,7 @@ psts <-
     roi = as.factor(roi)
   ) %>%
   filter(
-    str_detect(roi,"pSTS")
+    str_detect(roi,"STS_")
   )
 sfg <- 
   pc_all_thr_wide %>%
@@ -554,7 +707,7 @@ sfg <-
     roi = as.factor(roi)
   ) %>%
   filter(
-    str_detect(roi,"SFG")
+    str_detect(roi,"SFG_")
   )
 spl <- 
   pc_all_thr_wide %>%
@@ -562,7 +715,7 @@ spl <-
     roi = as.factor(roi)
   ) %>%
   filter(
-    str_detect(roi,"SPL")
+    str_detect(roi,"SPL_")
   )
 stg <- 
   pc_all_thr_wide %>%
@@ -570,7 +723,7 @@ stg <-
     roi = as.factor(roi)
   ) %>%
   filter(
-    str_detect(roi,"STG")
+    str_detect(roi,"STG_")
   )
 
 mpftha <- 
@@ -579,7 +732,7 @@ mpftha <-
     roi = as.factor(roi)
   ) %>%
   filter(
-    str_detect(roi,"mPFtha")
+    str_detect(roi,"mPFtha_")
   )
 mpmtha <- 
   pc_all_thr_wide %>%
@@ -587,7 +740,7 @@ mpmtha <-
     roi = as.factor(roi)
   ) %>%
   filter(
-    str_detect(roi,"mPMtha")
+    str_detect(roi,"mPMtha_")
   )
 
 stha <- 
@@ -596,7 +749,7 @@ stha <-
     roi = as.factor(roi)
   ) %>%
   filter(
-    str_detect(roi,"Stha")
+    str_detect(roi,"Stha_")
   )
 
 rttha <- 
@@ -605,7 +758,7 @@ rttha <-
     roi = as.factor(roi)
   ) %>%
   filter(
-    str_detect(roi,"rTtha")
+    str_detect(roi,"rTtha_")
   )
 
 pptha <- 
@@ -614,7 +767,7 @@ pptha <-
     roi = as.factor(roi)
   ) %>%
   filter(
-    str_detect(roi,"Pp")
+    str_detect(roi,"Pptha_")
   )
 
 otha <- 
@@ -623,7 +776,7 @@ otha <-
     roi = as.factor(roi)
   ) %>%
   filter(
-    str_detect(roi,"Otha")
+    str_detect(roi,"Otha_")
   )
 
 cttha <- 
@@ -632,7 +785,7 @@ cttha <-
     roi = as.factor(roi)
   ) %>%
   filter(
-    str_detect(roi,"cTtha")
+    str_detect(roi,"cTtha_")
   )
 
 lpftha <- 
@@ -641,7 +794,7 @@ lpftha <-
     roi = as.factor(roi)
   ) %>%
   filter(
-    str_detect(roi,"lPFtha")
+    str_detect(roi,"lPFtha_")
   )
 
 sn <- 
@@ -650,7 +803,7 @@ sn <-
     roi = as.factor(roi)
   ) %>%
   filter(
-    str_detect(roi,"SN")
+    str_detect(roi,"SN_")
   )
 ```
 
@@ -1659,9 +1812,8 @@ pc_aucs_select <-
     )
 ```
 
-
 ### write csv
 ```{r}
-pc_aucs_select_fp <-"~/Box/pc_aucs.csv"
+pc_aucs_select_fp <-"~/Box/Mooddata_Coordinating/1_Lab_Coordinating/Users/JackieSchwartz/PHIND_RS_and_Suicide/Octo2020Analysis/pc_aucs.csv"
 write_csv(pc_aucs_select,pc_aucs_select_fp)
 ```
