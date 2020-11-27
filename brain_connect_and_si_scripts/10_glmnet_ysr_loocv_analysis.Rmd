@@ -132,24 +132,27 @@ ysr_siq_graph_select <-
   # converting race/ethinicity to factor and binarizing for analysis
     mutate(KSADS_Child_Race_by_P.T1 = factor(KSADS_Child_Race_by_P.T1),
          KSADS_Child_Race_by_P.T1_bin = ifelse(KSADS_Child_Race_by_P.T1 == "1", "1", "0"),
-         # converting sex to factor
-         sex_child = factor(sex_child)) %>%
+         # converting sex and race to factor
+         sex_child = factor(sex_child),
+         KSADS_Child_Race_by_P.T1_bin = factor(KSADS_Child_Race_by_P.T1_bin)) %>%
   # removing orig race/eth variable, temporal follow-up variables, ysr subscales
-  dplyr::select(-KSADS_Child_Race_by_P.T1, -siq_total_log, -siq_total.T3, -KSADS_Child_Race_by_P.T1_bin,  -Age_S1.T3, -Tanner_Average.T3, -KSADS_Child_Race_by_P.T1_bin,  -T1_KSADS_C_or_P_Thoughts, -T1_KSADS_C_or_P_bx, -T1_YSR_old_Withdrawn_Total_Score, -T1_YSR_old_Somatic_Complaints_Total_Score, -T1_YSR_old_AnxiousDepressed_Total_Score, -T3_YSR_New_AnxiousDepressed_Total_Score, -T3_YSR_New_WithdrawnDepressed_Total_Score, -T3_YSR_New_Somatic_Complaints_Total_Score) %>%
+  dplyr::select(-KSADS_Child_Race_by_P.T1, -siq_total_log, -siq_total.T3, -Age_S1.T3, -Tanner_Average.T3, -T1_KSADS_C_or_P_Thoughts, -T1_KSADS_C_or_P_bx, -T1_YSR_old_Withdrawn_Total_Score, -T1_YSR_old_Somatic_Complaints_Total_Score, -T1_YSR_old_AnxiousDepressed_Total_Score, -T3_YSR_New_AnxiousDepressed_Total_Score, -T3_YSR_New_WithdrawnDepressed_Total_Score, -T3_YSR_New_Somatic_Complaints_Total_Score) %>%
   # z-scoring follow-up ysr 
   mutate(T3_YSR_New_Internalizing_Problems_Total_Score_z = z_score(T3_YSR_New_Internalizing_Problems_Total_Score)) %>%
   # z-scoring the other numeric variables
-  mutate_at(vars(-ELS_ID, -sex_child), z_score) %>%
+  mutate_at(vars(-ELS_ID, -sex_child, -KSADS_Child_Race_by_P.T1_bin), z_score) %>%
   # selecting our dv (follow-up ysr, baseline ysr, and everything else)
   dplyr::select(ELS_ID, T3_YSR_New_Internalizing_Problems_Total_Score_z, T1_YSR_old_Internalizing_Problems_Total_Score, everything()) %>%
   # de-selecting the non-zscored follow-up ysr score
-  dplyr::select(-T3_YSR_New_Internalizing_Problems_Total_Score, -ELS_ID)
+  dplyr::select(-T3_YSR_New_Internalizing_Problems_Total_Score, -ELS_ID, -meds_baseline)
+  
+contrasts(ysr_siq_graph_select$KSADS_Child_Race_by_P.T1_bin) = contr.treatment(2)
 ```
 
 ```{r}
 #as.matrix
 
-ysr_predictors_scaled <- data.matrix(ysr_siq_graph_select[2:1261]) # columns 2 - 1261 are predictors
+ysr_predictors_scaled <- data.matrix(ysr_siq_graph_select[2:1262]) # columns 2 - 1261 are predictors
 ysr_scaled <- ysr_siq_graph_select$T3_YSR_New_Internalizing_Problems_Total_Score_z # my response variable
 ```
 
@@ -209,17 +212,21 @@ ysr_loocv_lasso_coef <- read_excel("tbl3toPlot.xlsx", sheet = "ysr")
 ysr_lasso_results <- ysr_loocv_lasso_coef %>%
   ggplot(
     aes(
-      x = reorder(Variable, ysrbetavalue),
+      x = reorder(Variables, ysrbetavalue),
       y = ysrbetavalue,
-      fill = Lobe
+      fill = `Participant Characteristic / Brain Region`
     )
   ) + 
   geom_bar(stat = "identity") +
   coord_flip() +
-  labs(x = "Variable", y = "YSR Beta Value") +
+  labs(x = "Variables", y = expression(beta)) +
   ggtitle("Predictors of Internalizing Severity") +
   theme_blank() +
-  scale_fill_brewer(palette="Set2")
+  scale_fill_manual(values = c("Clinical Characteristic" = "cornflowerblue",
+                               "Demographic" = "cadetblue",
+                               "Frontal Gyrus" = "violet",
+                               "Temporal Gyrus" = "gold1"))
+  #scale_fill_brewer(palette="Set2")
 
-ggsave("ysr_lasso_results.jpg", ysr_lasso_results, width = 7, height = 5)
+ggsave("ysr_lasso_results.jpg", ysr_lasso_results, width = 9, height = 5)
 ```
