@@ -29,16 +29,6 @@ set.seed(1234)
 graph_net_fp <- "~/Box/Mooddata_Coordinating/1_Lab_Coordinating/Users/JackieSchwartz/PHIND_RS_and_Suicide/Octo2020Analysis/siq_graph.csv"
 
 graph_net <- read_csv(graph_net_fp)
-
-sleepiness_fp <- "~/Box/Mooddata_Coordinating/1_Lab_Coordinating/Users/JackieSchwartz/PHIND_RS_and_Suicide/Octo2020Analysis/sleepiness.xlsx"
-
-sleepy <- read_excel(sleepiness_fp) %>%
-  rename("sleepy" = `sleepiness (1 = yes, 0 = no)`) %>%
-  dplyr::select(-`during which part of scan?`)
-
-graph_net <- left_join(graph_net,
-                       sleepy,
-                       by = "ELS_ID")
 ```
 
 ```{r}
@@ -60,105 +50,505 @@ graph_net_stand <-
          sex_child = factor(sex_child),
          sleepy = factor(sleepy),
          KSADS_Child_Race_by_P.T1_bin = ifelse(KSADS_Child_Race_by_P.T1 == "1", "1", "0"),
-         KSADS_Child_Race_by_P.T1_bin = factor(KSADS_Child_Race_by_P.T1_bin)
+         sex_child = ifelse(sex_child == "2", "1", "0"),
+         KSADS_Child_Race_by_P.T1_bin = factor(KSADS_Child_Race_by_P.T1_bin),
+         sex_child = factor(sex_child)
   ) %>%
+  mutate(siq_total_log_z = z_score(siq_total_log)) %>%
   dplyr::select(-KSADS_Child_Race_by_P.T1, -T1_KSADS_C_or_P_Thoughts, -T1_KSADS_C_or_P_bx, -siq_total_log) %>%
   # stnadardizing variables
-  mutate_at(vars(-ELS_ID, -sex_child, -KSADS_Child_Race_by_P.T1_bin, -meds_baseline, -sleepy), z_score) 
+  mutate_at(vars(-ELS_ID, -sex_child, -KSADS_Child_Race_by_P.T1_bin, -meds_baseline, -sleepy, -siq_total_log_z), z_score) 
 ```
 
 # siq
 ```{r}
-cor.test(graph_net_stand$siq_total.T3, graph_net_stand$T1_YSR_old_Internalizing_Problems_Total_Score) # 0.1812804
+cor.test(graph_net_stand$siq_total_log_z, graph_net_stand$T1_YSR_old_Internalizing_Problems_Total_Score, method = "spearman", exact = FALSE) # r = 0.3489684,p = 0.0002144
 
-cor.test(graph_net_stand$siq_total.T3, graph_net_stand$caudIFG_R_34.deg) # -0.2824903
+cor.test(graph_net_stand$siq_total_log_z, graph_net_stand$caudIFG_R_34.deg, method = "spearman", exact = FALSE) # r = -0.3142742, p = 0.0009251
 
-cor.test(graph_net_stand$siq_total.T3, graph_net_stand$caudvlPrG_L_63.deg) # -0.1501055
+cor.test(graph_net_stand$siq_total_log_z, graph_net_stand$caudvlPrG_L_63.deg, method = "spearman", exact = FALSE) # r = -0.265589, p = 0.005469
 
-cor.test(graph_net_stand$siq_total.T3, graph_net_stand$SN_R_226.wm_z) # 0.2096495
+cor.test(graph_net_stand$siq_total_log_z, graph_net_stand$SN_R_226.wm_z, method = "spearman", exact = FALSE) # r = 0.2164195, p = 0.02447
 
-cor.test(graph_net_stand$siq_total.T3, graph_net_stand$medventFuG_L_105.deg) # 0.2285399
+cor.test(graph_net_stand$siq_total_log_z, graph_net_stand$medventFuG_L_105.deg, method = "spearman", exact = FALSE) # r = 0.2584011, p = 0.006931
 
-cor.test(graph_net_stand$siq_total.T3, graph_net_stand$intlatITG_L_95.deg) # 0.1843783
+cor.test(graph_net_stand$siq_total_log_z, graph_net_stand$rostdorIPL_R_140.wm_z, method = "spearman", exact = FALSE)  # r = -0.2085568 , p = 0.03031
 
-cor.test(graph_net_stand$siq_total.T3, graph_net_stand$sgCG_R_188.eig_cent) # 0.139644
+cor.test(graph_net_stand$siq_total_log_z, graph_net_stand$intlatITG_L_95.deg, method = "spearman", exact = FALSE) # r = 0.2078276, p = 0.0309
 
-cor.test(graph_net_stand$siq_total.T3, graph_net_stand$rostdorIPL_R_138.wm_z)  # -0.06983533 
+cor.test(graph_net_stand$siq_total_log_z, graph_net_stand$sgCG_R_188.eig_cent, method = "spearman", exact = FALSE) # r = 0.1866045, p = 0.05315
+
+cor.test(graph_net_stand$siq_total_log_z, graph_net_stand$caudCG_R_186.pc, method = "spearman", exact = FALSE) # r = -0.1898089, p = 0.04912
+
+cor.test(graph_net_stand$siq_total_log_z, graph_net_stand$medAmyg_R_212.pc, method = "spearman", exact = FALSE) # r = 0.2336447, p = 0.01495
+```
+
+```{r}
+# internalizing
+a <- graph_net_stand %>%
+  ggplot(
+    aes(x = T1_YSR_old_Internalizing_Problems_Total_Score, y = siq_total_log_z)
+  ) +
+  geom_point() +
+  stat_smooth(method = "lm") +
+  theme_classic() +
+  labs(x = "Baseline Internalizing Severity", y = NULL) +
+  theme(
+    axis.text.x = element_text(size = 8)
+  )
+
+# caudIFG_R_34.deg
+b <- graph_net_stand %>%
+  ggplot(
+    aes(x = caudIFG_R_34.deg, y = siq_total_log_z)
+  ) +
+  geom_point() +
+  stat_smooth(method = "lm") +
+  theme_classic() +
+  labs(x = "Caudal IFG (R) Degree", y = NULL) +
+  theme(
+    axis.text.x = element_text(size = 8)
+  )
+
+# caudvlPrG_L_63.deg
+c <- graph_net_stand %>%
+  ggplot(
+    aes(x = caudvlPrG_L_63.deg, y = siq_total_log_z)
+  ) +
+  geom_point() +
+  stat_smooth(method = "lm") +
+  theme_classic() +
+  labs(x = "Caudal ventrolateral PrG (R) Degree", y = NULL) +
+  theme(
+    axis.text.x = element_text(size = 8)
+  )
+
+
+# SN_R_226.wm_z
+d <- graph_net_stand %>%
+  ggplot(
+    aes(x = SN_R_226.wm_z, y = siq_total_log_z)
+  ) +
+  geom_point() +
+  stat_smooth(method = "lm") +
+  theme_classic() +
+  labs(x = "Substantia nigra (R) Within-module degree", y = NULL) +
+  theme(
+    axis.text.x = element_text(size = 8)
+  )
+
+# medventFuG_L_105.deg
+e <- graph_net_stand %>%
+  ggplot(
+    aes(x = medventFuG_L_105.deg, y = siq_total_log_z)
+  ) +
+  geom_point() +
+  stat_smooth(method = "lm") +
+  theme_classic() +
+  labs(x = "Medioventral FuG (L) Degree", y = NULL) +
+  theme(
+    axis.text.x = element_text(size = 8)
+  )
+
+# rostdorIPL_R_140.wm_z
+f <- graph_net_stand %>%
+  ggplot(
+    aes(x = rostdorIPL_R_140.wm_z, y = siq_total_log_z)
+  ) +
+  geom_point() +
+  stat_smooth(method = "lm") +
+  theme_classic() +
+  labs(x = "Rostrodorsal IPL (R) Within-module degree", y = NULL) +
+  theme(
+    axis.text.x = element_text(size = 8)
+  )
+
+# intlatITG_L_95.deg
+g <- graph_net_stand %>%
+  ggplot(
+    aes(x = intlatITG_L_95.deg, y = siq_total_log_z)
+  ) +
+  geom_point() +
+  stat_smooth(method = "lm") +
+  theme_classic() +
+  labs(x = "Intermediate lateral ITG (L) Degree", y = NULL) +
+  theme(
+    axis.text.x = element_text(size = 8)
+  )
+
+# sgCG_R_188.eig_cent
+h <- graph_net_stand %>%
+  ggplot(
+    aes(x = sgCG_R_188.eig_cent, y = siq_total_log_z)
+  ) +
+  geom_point() +
+  stat_smooth(method = "lm") +
+  theme_classic() +
+  labs(x = "Subgenual cingulate gyrus (R) Eigenvector centrality", y = NULL) +
+  theme(
+    axis.text.x = element_text(size = 8)
+  )
+
+# caudCG_R_186.pc
+i <- graph_net_stand %>%
+  ggplot(
+    aes(x = caudCG_R_186.pc, y = siq_total_log_z)
+  ) +
+  geom_point() +
+  stat_smooth(method = "lm") +
+  theme_classic() +
+  labs(x = "Caudal cingulate gyrus (R) Participation coefficient", y = NULL) +
+  theme(
+    axis.text.x = element_text(size = 8)
+  )
+
+# medAmyg_R_212.pc
+j <- graph_net_stand %>%
+  ggplot(
+    aes(x = medAmyg_R_212.pc, y = siq_total_log_z)
+  ) +
+  geom_point() +
+  stat_smooth(method = "lm") +
+  theme_classic() +
+  labs(x = "Medial amygdala (R) Participation coefficient", y = NULL) +
+  theme(
+    axis.text.x = element_text(size = 8)
+  )
+
+library(cowplot)
+siq_lasso_grid <- plot_grid(a, b, c, d, e, f, g, h, i, j, 
+          labels = c('A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'),
+          align = "hv",
+          nrow = 5,
+          ncol = 2,
+          label_size = 9,
+          rel_widths = c(1, 1),
+          rel_heights = c(1, 1),
+          vjust = .95,
+          scale = .9)
+  
+
+ggsave("siq_lasso_grid.jpg", siq_lasso_grid, width = 9, height = 11.5)
 ```
 
 # ysr
 ```{r}
-cor.test(graph_net_stand$T3_YSR_New_Internalizing_Problems_Total_Score, graph_net_stand$intlatITG_L_95.eig_cent) # 0.3218807
+cor.test(graph_net_stand$T3_YSR_old_Internalizing_Problems_Total_Score, graph_net_stand$intlatITG_L_95.eig_cent, method = "spearman", exact = FALSE) # 0.24812 (p = 0.009621)
 
-summary(lm(T3_YSR_New_Internalizing_Problems_Total_Score ~ sex_child, data = graph_net_stand)) # 0.5692
+summary(lm(T3_YSR_old_Internalizing_Problems_Total_Score ~ sex_child, data = graph_net_stand)) # 0.5385 (p = 0.0050)
 
-cor.test(graph_net_stand$T3_YSR_New_Internalizing_Problems_Total_Score, graph_net_stand$medventFuG_R_106.deg) # 0.255075
+cor.test(graph_net_stand$T3_YSR_old_Internalizing_Problems_Total_Score, graph_net_stand$medventFuG_R_106.deg, method = "spearman", exact = FALSE) # 0.2244548 (p = 0.01953)
 
-cor.test(graph_net_stand$T3_YSR_New_Internalizing_Problems_Total_Score, graph_net_stand$T1_YSR_old_Internalizing_Problems_Total_Score) # 0.2857085
+cor.test(graph_net_stand$T3_YSR_old_Internalizing_Problems_Total_Score, graph_net_stand$T1_YSR_old_Internalizing_Problems_Total_Score, method = "spearman", exact = FALSE) # 0.3514177 (p = 0.0001921)
 
-cor.test(graph_net_stand$T3_YSR_New_Internalizing_Problems_Total_Score, graph_net_stand$Age_S1.T1) # -0.2665734 
+summary(lm(T3_YSR_old_Internalizing_Problems_Total_Score ~ sleepy, data = graph_net_stand)) # 0.5812 (p = 0.00369)
 
-cor.test(graph_net_stand$T3_YSR_New_Internalizing_Problems_Total_Score, graph_net_stand$caudIFG_R_34.deg) # -0.2800311 
+cor.test(graph_net_stand$T3_YSR_old_Internalizing_Problems_Total_Score, graph_net_stand$Age_S1.T1, method = "spearman", exact = FALSE) # -0.2017941 (p = 0.03623)
 
-cor.test(graph_net_stand$T3_YSR_New_Internalizing_Problems_Total_Score, graph_net_stand$caudPhG_L_111.eff_loc) # 0.2266781
+cor.test(graph_net_stand$T3_YSR_old_Internalizing_Problems_Total_Score, graph_net_stand$orbOrG_R_44.pc, method = "spearman", exact = FALSE) # -0.2441363 (p = 0.01089)
 
-cor.test(graph_net_stand$T3_YSR_New_Internalizing_Problems_Total_Score, graph_net_stand$vIFG_L_39.eig_cent) # -0.2496509 
+cor.test(graph_net_stand$T3_YSR_old_Internalizing_Problems_Total_Score, graph_net_stand$caudIFG_R_34.deg, method = "spearman", exact = FALSE) # -0.2742914  (p = 0.00407) 
 
-cor.test(graph_net_stand$T3_YSR_New_Internalizing_Problems_Total_Score, graph_net_stand$orbOrG_R_44.pc) # -0.2276543  
+cor.test(graph_net_stand$T3_YSR_old_Internalizing_Problems_Total_Score, graph_net_stand$caudPhG_L_111.eff_loc, method = "spearman", exact = FALSE) # 0.1906021  (p = 0.04817) 
+
+cor.test(graph_net_stand$T3_YSR_old_Internalizing_Problems_Total_Score, graph_net_stand$rostdorIPL_R_140.wm_z, method = "spearman", exact = FALSE) # -0.1850583  (p = 0.05519) 
+
+cor.test(graph_net_stand$T3_YSR_old_Internalizing_Problems_Total_Score, graph_net_stand$rostdorIPL_R_140.wm_z, method = "spearman", exact = FALSE) # -0.1850583  (p = 0.05519) 
+
+cor.test(graph_net_stand$T3_YSR_old_Internalizing_Problems_Total_Score, graph_net_stand$ecPhG_R_116.eig_cent, method = "spearman", exact = FALSE) # 0.2316795  (p = 0.01584) 
+
+cor.test(graph_net_stand$T3_YSR_old_Internalizing_Problems_Total_Score, graph_net_stand$vIFG_L_39.eig_cent, method = "spearman", exact = FALSE) # -0.2062697  (p = 0.03221) 
+
+cor.test(graph_net_stand$T3_YSR_old_Internalizing_Problems_Total_Score, graph_net_stand$caudIFG_R_34.wm_z, method = "spearman", exact = FALSE) # -0.2507869  (p = 0.008847) 
+
+cor.test(graph_net_stand$T3_YSR_old_Internalizing_Problems_Total_Score, graph_net_stand$postPhG_R_114.eff_loc, method = "spearman", exact = FALSE) # 0.14681  (p = 0.1295) 
+
 ```
 
 
 # participant characteristic correlations
 ```{r}
-summary(lm(siq_total.T3 ~ sex_child, data = graph_net_stand))# 0.43 (p = 0.0258)
+summary(lm(siq_total_log_z ~ sex_child, data = graph_net_stand))# 0.2632 (p = 0.176)
 
-summary(lm(siq_total.T3 ~ KSADS_Child_Race_by_P.T1_bin, data = graph_net_stand)) #-0.07 (p = 0.726)
+summary(lm(siq_total_log_z ~ KSADS_Child_Race_by_P.T1_bin, data = graph_net_stand)) #-0.15514 (p = 0.423)
 
-summary(lm(siq_total.T3 ~ Age_S1.T1, data = graph_net_stand)) # -0.20 (p = 0.0396)
+cor.test(graph_net_stand$siq_total.T3, graph_net_stand$Age_S1.T1, method = "spearman", exact = FALSE) # -0.1718493  (p = 0.07534)
 
-summary(lm(siq_total.T3 ~ Tanner_Average.T1, data = graph_net_stand)) # 0.03 (p = .743) 
+cor.test(graph_net_stand$siq_total.T3, graph_net_stand$Tanner_Average.T1, method = "spearman", exact = FALSE) # -0.01786679 (p = 0.8544)
 
-summary(lm(siq_total.T3 ~ T1_YSR_old_Internalizing_Problems_Total_Score, data = graph_net_stand)) # 0.18 (p = 0.0592)
+cor.test(graph_net_stand$siq_total.T3, graph_net_stand$T1_YSR_old_Internalizing_Problems_Total_Score, method = "spearman", exact = FALSE) # 0.3489684 (p = 0.0002144)
 
-summary(lm(siq_total.T3 ~ interval_s2t1_s1t3, data = graph_net_stand)) # 0.20 (p = 0.035)
+cor.test(graph_net_stand$siq_total.T3, graph_net_stand$interval_s2t1_s1t3, method = "spearman", exact = FALSE) # 0.08627892 (p = 0.3746)
 
-summary(lm(siq_total.T3 ~ sumsev_type_t1, data = graph_net_stand)) # 0.16 (p = 0.0937)
+cor.test(graph_net_stand$siq_total.T3, graph_net_stand$sumsev_type_t1, method = "spearman", exact = FALSE) # 0.2752162 (p = 0.003942)
 
-summary(lm(siq_total.T3 ~ sss_t1, data = graph_net_stand)) # 0.04 (p = 0.675)
+cor.test(graph_net_stand$siq_total.T3, graph_net_stand$sss_t1, method = "spearman", exact = FALSE) # 0.01709821 (p = 0.8606)
 
-summary(lm(siq_total.T3 ~ Parent_Education.T1, data = graph_net_stand)) # 0.13 (p = 0.184)
+cor.test(graph_net_stand$siq_total.T3, graph_net_stand$Parent_Education.T1, method = "spearman", exact = FALSE) # 0.1236585 (p = 0.2023)
 
-summary(lm(siq_total.T3 ~ MeanFD, data = graph_net_stand)) # 0.016 (p=0.8691)
+cor.test(graph_net_stand$siq_total.T3, graph_net_stand$MeanFD, method = "spearman", exact = FALSE) # -0.04530643 (p = 0.6415)
 
-summary(lm(siq_total.T3 ~ BMI, data = graph_net_stand)) # 0.00000211044348803693 (p=1)
+cor.test(graph_net_stand$siq_total.T3, graph_net_stand$BMI, method = "spearman", exact = FALSE) # 0.05010598 (p = 0.6066)
 
-summary(lm(siq_total.T3 ~ sleepy, data = graph_net_stand)) # 0.3359 (0.0987)
+summary(lm(siq_total_log_z ~ sleepy, data = graph_net_stand)) # 0.4694 (0.0199)
 
-p <- c(0.0258, 0.726, 0.0396, .743 , 0.0592, 0.035, 0.0937,0.675, 0.184, 0.8691, 1, 0.0987)
-p.adjust(p, method ="fdr", n = length(p))
-# 0.1584000 0.8916000 0.1584000 0.8916000 0.1776000 0.1584000 0.1974000 0.8916000 0.3154286, 0.9481091, 1.0000000, 0.1974000
-
-summary(lm(siq_total.T3 ~ Tanner_Average.T1*sex_child, data = graph_net_stand)) # just sex
-summary(lm(siq_total.T3 ~ meds_baseline, data = graph_net_stand)) # 0.029179 (p=.913)
+mean_grp0 <- -0.3085886
+mean_grp1 <- 0.1608138
+ graph_net_stand %>%
+  ggplot(
+    aes(x = sleepy, y = siq_total_log_z)
+  ) +
+   geom_boxplot() +
+   geom_violin(alpha = .3) +
+   geom_point(alpha = .3) +
+  theme_classic()
+t.test(siq_total_log_z ~ sleepy, data = graph_net_stand)
 ```
 
 ## correlations with mean fd
 ```{r}
-summary(lm(MeanFD ~ T1_YSR_old_Internalizing_Problems_Total_Score, data = graph_net_stand)) # -0.0410864826523191228880 (p=0.671)
-summary(lm(MeanFD ~ caudIFG_R_34.deg, data = graph_net_stand)) # 0.112125241372850806276 (p=0.246)
-summary(lm(MeanFD ~ caudvlPrG_L_63.deg, data = graph_net_stand)) # 0.148532746729094278226 (p=0.123)
-summary(lm(MeanFD ~ SN_R_226.wm_z, data = graph_net_stand)) # -0.017570896445226486665 (p=0.856)
-summary(lm(MeanFD ~ medventFuG_L_105.deg, data = graph_net_stand)) # -0.026220436165970469750 (p=0.787)
-summary(lm(MeanFD ~ intlatITG_L_95.deg, data = graph_net_stand)) # -0.27178368207123015932 (p=0.00425)**
-summary(lm(MeanFD ~ sgCG_R_188.eig_cent, data = graph_net_stand)) # -0.077012712801159635689 (p=0.426)
-summary(lm(MeanFD ~ rostdorIPL_R_140.wm_z, data = graph_net_stand)) # -0.0177039951528672016845 (p=0.855)
-p <- c(0.671, p=0.246, 0.123, 0.856 , 0.787, 0.00425, 0.426, 0.855)
-p.adjust(p, method ="fdr", n = length(p))
-# 0.856 0.656 0.492 0.856 0.856 0.034 0.852 0.856
+
+cor.test(graph_net_stand$MeanFD, graph_net_stand$T1_YSR_old_Internalizing_Problems_Total_Score, method = "spearman", exact = FALSE) # 0.03108939 (p = 0.7494)
+
+cor.test(graph_net_stand$MeanFD, graph_net_stand$caudIFG_R_34.deg, method = "spearman", exact = FALSE) # r = 0.04919591, p = 0.6131
+
+cor.test(graph_net_stand$MeanFD, graph_net_stand$caudvlPrG_L_63.deg, method = "spearman", exact = FALSE) # r = 0.03019145, p = 0.7564
+
+cor.test(graph_net_stand$MeanFD, graph_net_stand$SN_R_226.wm_z, method = "spearman", exact = FALSE) # r = 0.01943963, p = 0.8417
+
+cor.test(graph_net_stand$MeanFD, graph_net_stand$medventFuG_L_105.deg, method = "spearman", exact = FALSE) # r = -0.03752944 , p = 0.6998
+
+cor.test(graph_net_stand$MeanFD, graph_net_stand$rostdorIPL_R_140.wm_z, method = "spearman", exact = FALSE)  # r = -0.01242783, p = 0.8984
+
+cor.test(graph_net_stand$MeanFD, graph_net_stand$intlatITG_L_95.deg, method = "spearman", exact = FALSE) # r = -0.2563932, p = 0.007397
+
+cor.test(graph_net_stand$MeanFD, graph_net_stand$sgCG_R_188.eig_cent, method = "spearman", exact = FALSE) # r = -0.06180573 , p = 0.5251
+
+cor.test(graph_net_stand$MeanFD, graph_net_stand$caudCG_R_186.pc, method = "spearman", exact = FALSE) # r = 0.002681821, p = 0.978
+
+cor.test(graph_net_stand$MeanFD, graph_net_stand$medAmyg_R_212.pc, method = "spearman", exact = FALSE) # r = -0.1294089 , p = 0.1819
+
+
 ```
 
 Does degree of the L inlatITG correlate with SI above and beyond mean FD?
 ```{r}
-summary(lm(siq_total.T3 ~ intlatITG_L_95.deg + MeanFD, data = graph_net_stand))
+summary(lm(siq_total_log_z ~ intlatITG_L_95.deg + MeanFD, data = graph_net_stand))
+# yes (B of intlatITG_L_95.deg = 0.24522189146071976529, p = .0138)
+# effect of Mean FD is non-sig
+# model is sig (.029)
 ```
 yes - intlatITG is associated with severity of SI above and beyond MeanFD.
+
+## correlations within each graph metric
+```{r}
+library(corrr)
+library(corrplot)
+```
+
+### degree
+```{r degree}
+deg_roi_aucs_cor <- 
+  graph_net_stand %>%
+  dplyr::select(
+    ends_with("deg")
+    ) %>%
+  cor(method = "spearman")
+
+deg_cor_tbl <- 
+  graph_net_stand %>%
+  dplyr::select(
+    ends_with("deg")
+  ) %>% 
+  correlate(use = "complete.obs", method = "spearman") %>%
+  fashion()
+deg_cor_tbl
+
+deg_ci <- cor.mtest(deg_roi_aucs_cor, conf.level = 0.95)
+deg_ci_pAdj <- p.adjust(c(deg_ci[[1]]), method = "bonferroni")
+deg_ci_resAdj <- matrix(deg_ci_pAdj, ncol = dim(deg_ci[[1]])[1])
+
+#d3heatmap(deg_roi_aucs, scale = "column", hclustfun = hclust, dendrogram = "none")
+png(height=2000, width=2000, file="deg_corrplot.png")
+corrplot(deg_roi_aucs_cor, 
+         method = "color",
+         order = "hclust",
+         p.mat = deg_ci_resAdj,
+         sig.level = 0.05,
+         insig = "blank",
+         tl.cex = .3, 
+         tl.col = "black",
+         type = "upper")
+dev.off()
+
+```
+
+## local efficiency
+```{r loc eff}
+loc_eff_roi_aucs_cor <- 
+  graph_net_stand %>%
+  dplyr::select(
+    ends_with("eff_loc")
+    ) %>%
+  cor(method = "spearman")
+
+loc_eff_cor_tbl <- 
+  graph_net_stand %>%
+  dplyr::select(
+    ends_with("eff_loc")
+  ) %>% 
+  correlate(use = "complete.obs", method = "spearman") %>% 
+  fashion()
+loc_eff_cor_tbl
+
+loceff_ci <- cor.mtest(loc_eff_roi_aucs_cor, conf.level = 0.95)
+loceff_ci_pAdj <- p.adjust(c(loceff_ci[[1]]), method = "bonferroni")
+loceff_ci_resAdj <- matrix(loceff_ci_pAdj, ncol = dim(loceff_ci[[1]])[1])
+
+png(height=2000, width=2000, file="loceff_corrplot.png")
+corrplot(loc_eff_roi_aucs_cor, 
+         method = "color",
+         order = "hclust",
+         p.mat = loceff_ci_resAdj,
+         sig.level = 0.05,
+         insig = "blank",
+         tl.cex = .3, 
+         tl.col = "black",
+         type = "upper")
+dev.off()
+```
+
+## eigenvector centrality
+```{r eig cent}
+eig_cent_roi_aucs_cor <- 
+  graph_net_stand %>%
+  dplyr::select(
+    ends_with("eig_cent")
+    ) %>%
+  cor(method = "spearman")
+
+eig_cent_cor_tbl <- 
+  graph_net_stand %>%
+  dplyr::select(
+    ends_with("eig_cent")
+  ) %>% 
+  correlate(use = "complete.obs", method = "spearman") %>% 
+  fashion()
+eig_cent_cor_tbl
+
+eigcent_ci <- cor.mtest(eig_cent_roi_aucs_cor, conf.level = 0.95)
+eigcent_ci_pAdj <- p.adjust(c(eigcent_ci[[1]]), method = "bonferroni")
+eigcent_ci_resAdj <- matrix(eigcent_ci_pAdj, ncol = dim(eigcent_ci[[1]])[1])
+
+png(height=2000, width=2000, file="eigcent_corrplot.png")
+corrplot(eig_cent_roi_aucs_cor, 
+         method = "color",
+         order = "hclust",
+         p.mat = eigcent_ci_resAdj,
+         sig.level = 0.05,
+         insig = "blank",
+         tl.cex = .3, 
+         tl.col = "black",
+         type = "upper")
+dev.off()
+```
+
+## within module z score 
+```{r within mod}
+wm_z_aucs_cor <- 
+  graph_net_stand %>%
+  dplyr::select(
+    ends_with("wm_z")
+    ) %>%
+  cor(method = "spearman")
+
+wm_z_cor_tbl <- 
+  graph_net_stand %>%
+  dplyr::select(
+    ends_with("wm_z")
+  ) %>% 
+  correlate(use = "complete.obs", method = "spearman") %>% 
+  fashion()
+wm_z_cor_tbl
+
+wm_ci <- cor.mtest(wm_z_aucs_cor, conf.level = 0.95)
+wm_ci_pAdj <- p.adjust(c(wm_ci[[1]]), method = "bonferroni")
+wm_ci_resAdj <- matrix(wm_ci_pAdj, ncol = dim(wm_ci[[1]])[1])
+
+
+png(height=2000, width=2000, file="wm_z_corrplot.png")
+corrplot(wm_z_aucs_cor, 
+         method = "color",
+         order = "hclust",
+         p.mat = wm_ci_resAdj,
+         sig.level = 0.05,
+         insig = "blank",
+         tl.cex = .3, 
+         tl.col = "black",
+         type = "upper")
+dev.off()
+```
+
+## participation coefficient 
+```{r part coeff}
+pc_aucs_cor <- 
+  graph_net_stand %>%
+  dplyr::select(
+    ends_with("pc")
+    ) %>%
+  cor(method = "spearman")
+
+pc_cor_tbl <- 
+  graph_net_stand %>%
+  dplyr::select(
+    ends_with("pc")
+  ) %>% 
+  correlate(use = "complete.obs", method = "spearman") %>% 
+  fashion()
+pc_cor_tbl
+
+pc_ci <- cor.mtest(pc_aucs_cor, conf.level = 0.95)
+pc_ci_pAdj <- p.adjust(c(pc_ci[[1]]), method = "bonferroni")
+pc_ci_resAdj <- matrix(pc_ci_pAdj, ncol = dim(pc_ci[[1]])[1])
+
+png(height=2000, width=2000, file="pc_corrplot.png")
+corrplot(pc_aucs_cor, 
+         method = "color",
+         order = "hclust",
+         p.mat = pc_ci_resAdj,
+         sig.level = 0.05,
+         insig = "blank",
+         tl.cex = .3, 
+         tl.col = "black",
+         type = "upper")
+dev.off()
+```
+#### correlation matrix among all variables
+```{r}
+aucs_cor <- 
+  graph_net_stand %>%
+  dplyr::select(-ELS_ID, -sex_child, -KSADS_Child_Race_by_P.T1_bin, -sleepy) %>%
+  cor(method = "spearman")
+
+cor_tbl <- 
+  graph_net_stand %>%
+  dplyr::select(-ELS_ID, -sex_child, -KSADS_Child_Race_by_P.T1_bin, -sleepy) %>% 
+  correlate(use = "complete.obs", method = "spearman") %>% 
+  fashion()
+cor_tbl
+
+all_ci <- cor.mtest(aucs_cor, conf.level = 0.95)
+
+png(height=2000, width=2000, file="all_corrplot.png")
+corrplot(aucs_cor, 
+         diag = FALSE,
+         insig = "blank",
+         method = "color",
+         order = "FPC",
+         tl.pos = "td",
+         tl.cex = .1, 
+         tl.col = "black", 
+         tl.offset = .6,
+         type = "upper")
+dev.off()
+```

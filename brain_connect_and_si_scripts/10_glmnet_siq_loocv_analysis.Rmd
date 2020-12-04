@@ -46,7 +46,9 @@ diff_mu / sd
 ## de-selecting variables
 ```{r}
 graph_net_select <- graph_net %>%
-  dplyr::select(-c(siq_total.T3, T3_YSR_New_Internalizing_Problems_Total_Score))
+  dplyr::select(-c(siq_total.T3, T3_YSR_old_Internalizing_Problems_Total_Score, meds_baseline, T1_KSADS_C_or_P_Thoughts, T1_KSADS_C_or_P_bx, Age_S1.T3, Tanner_Average.T3))
+
+# already filtered out those with history of stbs
 ```
 
 #### recoding and standardizing
@@ -57,25 +59,19 @@ graph_net_stand <- graph_net_select %>%
   mutate(
     KSADS_Child_Race_by_P.T1 = factor(KSADS_Child_Race_by_P.T1),
     KSADS_Child_Race_by_P.T1_bin = ifelse(KSADS_Child_Race_by_P.T1 == "1", "1", "0"),
-    # converting sex to factor
+    # converting sex and sleepiness to factor
     sex_child = factor(sex_child),
-    meds_baseline = factor(meds_baseline)
+    sex_child = ifelse(sex_child == "2", "1", "0"),
+    sleepy = factor(sleepy),
     ) %>%
-  # mutate(
-    # coding parent education
-    # Parent_Education.T1_ord = factor(
-    #   Parent_Education.T1, ordered = TRUE,
-    #   levels = c("1", "2", "3", "4", "5", "6", "7", "8")
-    #   )
-    # ) %>%
-  # removing orig variable
-  dplyr::select(-KSADS_Child_Race_by_P.T1) %>%
-  # z-scoring siq
+  # z-scoring siq (doing this separately so I can append a z to it as my DV)
   mutate(siq_total_log_z = z_score(siq_total_log)) %>%
+  # removing orig race/ethnicity and siq log variable
+  dplyr::select(-KSADS_Child_Race_by_P.T1, -siq_total_log) %>%
   # z-scoring all numeric variables
-  mutate_at(vars(-ELS_ID, -siq_total_log, -KSADS_Child_Race_by_P.T1_bin, -sex_child, -T1_KSADS_C_or_P_Thoughts, -T1_KSADS_C_or_P_bx, -meds_baseline), z_score) %>%
+  mutate_at(vars(-ELS_ID, -siq_total_log_z, -KSADS_Child_Race_by_P.T1_bin, -sex_child, -sleepy), z_score) %>%
   # arranging with ELS_ID first, then siq, then everything else
-  dplyr::select(ELS_ID, siq_total_log_z, siq_total_log, everything())
+  dplyr::select(ELS_ID, siq_total_log_z, everything())
 
 
 graph_net_stand_fp <- "~/Box/Mooddata_Coordinating/1_Lab_Coordinating/Users/JackieSchwartz/PHIND_RS_and_Suicide/Octo2020Analysis/siq_graph_net_stand.csv"
@@ -85,23 +81,21 @@ graph_net <- write_csv(graph_net_stand, graph_net_stand_fp)
 
 
 ```{r}
-graph_net_stand_filt <- 
+graph_net_stand <-
   graph_net_stand %>%
-  # removing race/ethnicity to look at separately and the temporal follow-up variables (-KSADS_Child_Race_by_P.T1_bin)
-  dplyr::select(-Age_S1.T3, -Tanner_Average.T3) %>%
-  dplyr::select(ELS_ID, siq_total_log_z, everything()) %>%
-  mutate(KSADS_Child_Race_by_P.T1_bin = factor(KSADS_Child_Race_by_P.T1_bin))
-
-contrasts(graph_net_stand_filt$KSADS_Child_Race_by_P.T1_bin) = contr.treatment(2)
+  mutate_at(vars(KSADS_Child_Race_by_P.T1_bin, sex_child, sleepy), factor)
+contrasts(graph_net_stand$KSADS_Child_Race_by_P.T1_bin) = contr.treatment(2)
+contrasts(graph_net_stand$sex_child) = contr.treatment(2)
+contrasts(graph_net_stand$sleepy) = contr.treatment(2)
 ```
 
 ```{r}
-supp_graph_net_stand_siq <- graph_net_stand_filt %>%
-  dplyr::select(-ELS_ID,-siq_total_log, -meds_baseline, -T1_KSADS_C_or_P_Thoughts, -T1_KSADS_C_or_P_bx) %>%
+supp_graph_net_stand_siq <- graph_net_stand %>%
+  dplyr::select(-ELS_ID) %>%
   dplyr::select(siq_total_log_z, everything()) # response (dv) variable in first column
 
 #as.matrix
-supp_predictors_scaled <- data.matrix(supp_graph_net_stand_siq[2:1262]) # columns 2 - 1260 are predictors
+supp_predictors_scaled <- data.matrix(supp_graph_net_stand_siq[2:1263]) # columns 2 - 1263 are predictors
 supp_siq_scaled <-supp_graph_net_stand_siq$siq_total_log_z # my response variable
 ```
 
@@ -132,6 +126,7 @@ k
 # conducting cross validated glmnet on whole sample using LOOCV
 cv_model_loocv <- cv.glmnet(x = supp_predictors_scaled,
                             y = supp_siq_scaled,
+                            standardize = FALSE, # already scaled
                             family = "gaussian",
                             grouped = FALSE,
                             nfolds = k)
@@ -140,16 +135,15 @@ cv_model_loocv <- cv.glmnet(x = supp_predictors_scaled,
 # supp_predictors_scaled is my x matrix
 # supp_siq_scaled is my y
 X <- model.matrix(siq_total_log_z ~ ., data = supp_graph_net_stand_siq)[,-1]
-# model.matrix(siq_total_log_z ~ ., data = supp_graph_net_stand_siq)[,-1]
 # predict
 y_hat <- predict(cv_model_loocv,  newx = X,  s = "lambda.min")
 # R-Squared
 r_sq <- 1 - (sum((supp_siq_scaled - y_hat)^2) / sum((supp_siq_scaled - mean(supp_siq_scaled))^2))
-r_sq
+r_sq # 0.2259336
 
 
 ## extracting coefficients
-cv_model_loocv$lambda.min # 0.1863286
+cv_model_loocv$lambda.min # 0.1841177
 options(max.print = 1265)
 coef_loocv <- coef(cv_model_loocv, s = "lambda.min")
 ```
@@ -168,18 +162,24 @@ siq_lasso_results <- siq_loocv_lasso_coef %>%
       fill = `Participant Characteristic / Brain Region`
     )
   ) + 
+  scale_y_continuous(breaks = seq(-.10, .15, by = .01)) +
   geom_bar(stat = "identity") +
   coord_flip() +
   labs(x = "Variables", y = expression(beta)) +
   ggtitle("Predictors of Severity of Suicidal Ideation") +
   theme_blank() +
-  scale_fill_manual(values = c("Clinical Characteristic" = "cornflowerblue",
+  theme(axis.text.x = element_text(size = 8, angle = 90, color = "black"),
+        axis.text.y = element_text(size = 10, color = "black"),
+        legend.text = element_text(size = 8, color = "black"),
+        legend.title = element_text(size = 10, color = "black")) +
+  scale_fill_manual(values = c("Participant Characteristic" = "cornflowerblue",
                                "Frontal Gyrus" = "violet",
                                "Temporal Gyrus" = "gold1",
                                "Basal Ganglia" = "mediumseagreen",
                                "Cingulate Gyrus" = "darkorange",
-                               "Parietal Lobe" = "turquoise"))
+                               "Parietal Lobe" = "turquoise",
+                               "Subcortical Nuclei" = "purple"))
 
-ggsave("siq_lasso_results.jpg", siq_lasso_results, width = 9, height = 5)
+ggsave("siq_lasso_results.jpg", siq_lasso_results, width = 10, height = 5)
 ```
 
