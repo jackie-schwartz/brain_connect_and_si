@@ -1,7 +1,7 @@
 ---
 title: "graph_t1_eff_local"
 author: "Jackie"
-date: "10/21/2020"
+date: "4/21/2021"
 output: html_notebook
 ---
 
@@ -21,7 +21,7 @@ library(plotly)
 
 # reading data
 ```{r message=FALSE}
-eff_loc_fp <- "~/Box/Mooddata_Coordinating/1_Lab_Coordinating/Users/JackieSchwartz/PHIND_RS_and_Suicide/Octo2020Analysis/results/eff_loc.xlsx"
+eff_loc_fp <- "~/Box/Mooddata_Coordinating/1_Lab_Coordinating/Users/JackieSchwartz/PHIND_RS_and_Suicide/April2021Analysis/eff_loc.xlsx"
 eff_loc_th.1 <-
   read_excel(eff_loc_fp, sheet = "eff_loc_.1")
 eff_loc_th.12 <-
@@ -77,102 +77,57 @@ eff_loc_th.2 <-
 eff_loc_th.1 <-
   eff_loc_th.1 %>%
   mutate(ELS_ID = 
-  str_remove(ELS_ID, 
-             "_ses-T1_task-rest_space-MNIPediatricAsym_cohort-4_res-2-BrainnetomeTimeseries"
-             ),
-  ELS_ID =
     str_remove(ELS_ID,
                "sub-")
   ) %>%
-  mutate(ELS_ID = as.numeric(ELS_ID))
+  mutate(ELS_ID = as.numeric(ELS_ID),
+         ELS_ID = as.factor(ELS_ID)) 
 eff_loc_th.12 <-
   eff_loc_th.12  %>%
   mutate(ELS_ID = 
-  str_remove(ELS_ID, 
-             "_ses-T1_task-rest_space-MNIPediatricAsym_cohort-4_res-2-BrainnetomeTimeseries"
-             ),
-  ELS_ID =
     str_remove(ELS_ID,
                "sub-")
   ) %>%
-  mutate(ELS_ID = as.numeric(ELS_ID))
+  mutate(ELS_ID = as.numeric(ELS_ID),
+         ELS_ID = as.factor(ELS_ID))
 eff_loc_th.14 <-
   eff_loc_th.14  %>%
-  mutate(ELS_ID = 
-  str_remove(ELS_ID, 
-             "_ses-T1_task-rest_space-MNIPediatricAsym_cohort-4_res-2-BrainnetomeTimeseries"
-             ),
-  ELS_ID =
+  mutate(ELS_ID =
     str_remove(ELS_ID,
                "sub-")
   ) %>%
-  mutate(ELS_ID = as.numeric(ELS_ID))
+  mutate(ELS_ID = as.numeric(ELS_ID),
+         ELS_ID = as.factor(ELS_ID))
 eff_loc_th.16 <-
   eff_loc_th.16  %>%
   mutate(ELS_ID = 
-  str_remove(ELS_ID, 
-             "_ses-T1_task-rest_space-MNIPediatricAsym_cohort-4_res-2-BrainnetomeTimeseries"
-             ),
-  ELS_ID =
     str_remove(ELS_ID,
                "sub-")
   ) %>%
-  mutate(ELS_ID = as.numeric(ELS_ID))
+  mutate(ELS_ID = as.numeric(ELS_ID),
+         ELS_ID = as.factor(ELS_ID))
 eff_loc_th.18 <-
   eff_loc_th.18  %>%
   mutate(ELS_ID = 
-  str_remove(ELS_ID, 
-             "_ses-T1_task-rest_space-MNIPediatricAsym_cohort-4_res-2-BrainnetomeTimeseries"
-             ),
-  ELS_ID =
     str_remove(ELS_ID,
                "sub-")
   ) %>%
-  mutate(ELS_ID = as.numeric(ELS_ID))
+  mutate(ELS_ID = as.numeric(ELS_ID),
+         ELS_ID = as.factor(ELS_ID))
 eff_loc_th.2 <-
   eff_loc_th.2  %>%
   mutate(ELS_ID = 
-  str_remove(ELS_ID, 
-             "_ses-T1_task-rest_space-MNIPediatricAsym_cohort-4_res-2-BrainnetomeTimeseries"
-             ),
-  ELS_ID =
     str_remove(ELS_ID,
                "sub-")
   ) %>%
-  mutate(ELS_ID = as.numeric(ELS_ID))
+  mutate(ELS_ID = as.numeric(ELS_ID),
+         ELS_ID = as.factor(ELS_ID))
 ```
 
-## ID to factor
-```{r}
-
-eff_loc_th.1 <-
-  eff_loc_th.1 %>%
-  mutate(ELS_ID = as.factor(ELS_ID))
-
-eff_loc_th.12 <-
-  eff_loc_th.12 %>%
-  mutate(ELS_ID = as.factor(ELS_ID))
-
-eff_loc_th.14 <-
-  eff_loc_th.14 %>%
-  mutate(ELS_ID = as.factor(ELS_ID))
-
-eff_loc_th.16 <-
-  eff_loc_th.16 %>%
-  mutate(ELS_ID = as.factor(ELS_ID))
-
-eff_loc_th.18 <-
-  eff_loc_th.18 %>%
-  mutate(ELS_ID = as.factor(ELS_ID))
-
-eff_loc_th.2 <-
-  eff_loc_th.2 %>%
-  mutate(ELS_ID = as.factor(ELS_ID))
-```
 
 ## renaming variables
 ```{r}
-bg_rois_fp <- "~/Box/Mooddata_Coordinating/1_Lab_Coordinating/Users/JackieSchwartz/PHIND_RS_and_Suicide/Octo2020Analysis/bn_timeser_102020/BrainRegions_Brainnetome_250_wBG_rc.xlsx"
+bg_rois_fp <-"~/Box/Mooddata_Coordinating/1_Lab_Coordinating/Users/JackieSchwartz/PHIND_RS_and_Suicide/April2021Analysis/bn_timeseries_meants/BrainRegions_Brainnetome_250_wBG_rc.xlsx"
 bg_rois <- read_excel(bg_rois_fp, col_names = FALSE)
 
 bg_rois <-
@@ -1814,6 +1769,6 @@ eff_loc_aucs_select <-
 
 ### write csv
 ```{r}
-eff_loc_aucs_select_fp <-"~/Box/Mooddata_Coordinating/1_Lab_Coordinating/Users/JackieSchwartz/PHIND_RS_and_Suicide/Octo2020Analysis/eff_loc_aucs.csv"
+eff_loc_aucs_select_fp <-"~/Box/Mooddata_Coordinating/1_Lab_Coordinating/Users/JackieSchwartz/PHIND_RS_and_Suicide/April2021Analysis/eff_loc_aucs.csv"
 write_csv(eff_loc_aucs_select,eff_loc_aucs_select_fp)
 ```

@@ -1,0 +1,1212 @@
+---
+title: "10_glmnet_ysr_nest_resamp"
+author: "Jackie"
+date: "5/16/21"
+output: html_notebook
+---
+
+
+This script performs nested resampling using loocv on inner and outer resamples to obtain relavtively unbiased performance estimation
+
+# loading libraries
+```{r, message=FALSE}
+library(glmnet)
+library(lars)
+library(tidyverse)
+library(readxl)
+library(pscl)
+library(MASS)
+library(stringr)
+library(sjPlot)
+library(directlabels)
+library(paradox)
+library(mlr)
+
+# set seed
+set.seed(1234)
+
+# expanding print
+options(max.print = 1275)
+```
+
+# reading in data
+```{r, message=FALSE}
+graph_net_fp <- "~/Box/Mooddata_Coordinating/1_Lab_Coordinating/Users/JackieSchwartz/PHIND_RS_and_Suicide/April2021Analysis/fmaps_and_nofmaps/siq_graph.csv"
+
+graph_net <- read_csv(graph_net_fp)
+```
+
+
+# function to z-score
+```{r}
+options(scipen=999) 
+z_score <- function(x) {
+diff_mu <- x - mean(x, na.rm = T)
+sd <- sd(x, na.rm = T)
+diff_mu / sd
+}
+```
+
+## de-selecting variables
+```{r}
+graph_net_select_brain <- graph_net %>%
+  dplyr::select(
+    -c(meds_baseline)
+    )
+# already filtered out those with history of stbs
+```
+
+#### recoding and standardizing
+```{r}
+graph_net_stand_brain <- graph_net_select_brain %>%
+  # converting race/ethinicity to factor and binarizing for analysis
+  mutate(
+    KSADS_Child_Race_by_P.T1 = factor(KSADS_Child_Race_by_P.T1),
+    KSADS_Child_Race_by_P.T1_bin = ifelse(KSADS_Child_Race_by_P.T1 == "1", "1", "0"),
+    # 1 = white, 0 = poc
+    # converting sex and sleepiness to factor
+    sex_child = factor(sex_child),
+    sex_child = ifelse(sex_child == "2", "1", "0"),
+    sleepy = factor(sleepy),
+    fmap_applied = factor(fmap_applied)
+    ) %>%
+  dplyr::select(-KSADS_Child_Race_by_P.T1, -siq_total.T3) %>%
+  # z-scoring all numeric variables
+  mutate_at(vars(-ELS_ID, -siq_total_log, -KSADS_Child_Race_by_P.T1_bin, -sex_child, -sleepy, -fmap_applied, -T3_ysr_internalizing_sum), z_score) %>%
+  # arranging with ELS_ID first, then siq, then everything else
+  mutate(siq_total_log_z = z_score(siq_total_log),
+         T3_ysr_internalizing_sum_z = z_score(T3_ysr_internalizing_sum)) %>%
+  dplyr::select(ELS_ID, T3_ysr_internalizing_sum_z, T3_ysr_internalizing_sum, siq_total_log_z, siq_total_log, everything())
+
+# mean(graph_net_stand_brain$fmap_applied == "1")
+
+graph_net_stand_fp <- "~/Box/Mooddata_Coordinating/1_Lab_Coordinating/Users/JackieSchwartz/PHIND_RS_and_Suicide/April2021Analysis/fmaps_and_nofmaps/ysr_graph_net_stand_brainmod.csv"
+
+graph_net <- write_csv(graph_net_stand_brain, graph_net_stand_fp)
+```
+
+#### setting contrasts
+```{r}
+graph_net_stand_brain <-
+  graph_net_stand_brain %>%
+  mutate_at(vars(KSADS_Child_Race_by_P.T1_bin, sex_child, sleepy, fmap_applied), factor)
+contrasts(graph_net_stand_brain$KSADS_Child_Race_by_P.T1_bin) = contr.treatment(2)
+contrasts(graph_net_stand_brain$sex_child) = contr.treatment(2)
+contrasts(graph_net_stand_brain$sleepy) = contr.treatment(2)
+contrasts(graph_net_stand_brain$fmap_applied) = contr.treatment(2)
+```
+
+#### constructing x matrix and y vector
+```{r}
+graph_net_stand_siq_brain <- graph_net_stand_brain %>%
+  dplyr::select(-ELS_ID, -siq_total_log, -T3_ysr_internalizing_sum) %>%
+  dplyr::select(T3_ysr_internalizing_sum_z, siq_total_log_z, everything()) # response (dv) variable in first column
+
+#as.matrix
+predictors_ysr_scaled_brain <- data.matrix(graph_net_stand_siq_brain[2:1271]) # columns 2 - 1271 are predictors
+ysr_scaled_brain <- graph_net_stand_siq_brain$T3_ysr_internalizing_sum_z # my response variable
+save(predictors_ysr_scaled_brain, file = "predictors_ysr_scaled_brain.rda")
+save(ysr_scaled_brain, file = "ysr_scaled_brain.rda")
+```
+
+## to get sense of coefficient path
+```{r}
+lasso_ysr_brain <- glmnet(predictors_ysr_scaled_brain, ysr_scaled_brain, family = "gaussian", alpha = 1, standardize = FALSE)
+# 
+plot(lasso_ysr_brain, xvar = "dev", label = TRUE)
+```
+# nested cv
+```{r}
+library(remotes)
+n <- 106
+
+## Your procedure
+
+cvfit <- cv.glmnet(predictors_ysr_scaled_brain, ysr_scaled_brain, standardize = FALSE, alpha = 1, nfolds = n)
+betas <- coef(cvfit, s = "lambda.min")
+
+# computing rsquared of unnested cv
+X <- model.matrix(T3_ysr_internalizing_sum_z ~ ., data = graph_net_stand_siq_brain)[,-1]
+# predict
+y_hat <- predict(cvfit,  newx = X,  s = "lambda.min")
+# R-Squared
+r_sq <- 1 - (sum((ysr_scaled_brain - y_hat)^2) / sum((ysr_scaled_brain - mean(ysr_scaled_brain))^2))
+r_sq # 0.6116964 standardized prior to glmnet
+cvfit$lambda.min # 0.1487689
+
+## Get measure of performance of procedure
+preds <- double(n)
+ybars <- double(n)
+for(i in 1:n){
+    cvfit.inner <- cv.glmnet(predictors_ysr_scaled_brain[-i,], ysr_scaled_brain[-i], standardize = FALSE, nfolds = n-1, grouped=FALSE, alpha=1)
+    preds[i] <- predict(cvfit.inner, newx = predictors_ysr_scaled_brain[i,,drop=FALSE], s = "lambda.min")
+    ybars[i] <- mean(ysr_scaled_brain[-i])
+    cat(i)
+}
+
+# total SS
+mse0 <- mean((ysr_scaled_brain-ybars)^2) # 1.009524
+# mean square error
+mse <- mean((ysr_scaled_brain-preds)^2) # 0.5806678
+
+R2 <-1- mse/mse0 # 0.4248102
+```
+
+# zero-order correlations
+
+```{r}
+graph_net_corr <- graph_net_select_brain %>%
+  # converting race/ethinicity to factor and binarizing for analysis
+  mutate(
+    KSADS_Child_Race_by_P.T1 = factor(KSADS_Child_Race_by_P.T1),
+    KSADS_Child_Race_by_P.T1_bin = ifelse(KSADS_Child_Race_by_P.T1 == "1", "1", "0"),
+    # converting sex and sleepiness to factor
+    sex_child = factor(sex_child),
+    sex_child = ifelse(sex_child == "2", "1", "0"),
+    sleepy = factor(sleepy),
+    fmap_applied = factor(fmap_applied)
+    ) %>%
+  dplyr::select(ELS_ID, T3_ysr_internalizing_sum, siq_total_log, everything())
+graph_net_corr <-
+  graph_net_corr %>%
+  mutate_at(vars(KSADS_Child_Race_by_P.T1_bin, sex_child, sleepy, fmap_applied), factor)
+contrasts(graph_net_corr$KSADS_Child_Race_by_P.T1_bin) = contr.treatment(2)
+contrasts(graph_net_corr$sex_child) = contr.treatment(2)
+contrasts(graph_net_corr$sleepy) = contr.treatment(2)
+contrasts(graph_net_corr$fmap_applied) = contr.treatment(2)
+```
+
+
+```{r}
+labeltheme <- theme(axis.title.y = element_blank(),
+                    text = element_text(size = 7))
+# internalizing at follow-up
+cor.test(graph_net_corr$siq_total_log, graph_net_corr$T3_ysr_internalizing_sum)
+si_cor <-
+  graph_net_corr %>%
+  ggplot(
+    aes(
+      x = siq_total_log, 
+      y = T3_ysr_internalizing_sum
+      )
+    ) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  theme_classic() +
+  labs(
+    x = "Concurrent Suicidal Ideation Severity"
+  ) +
+  labeltheme
+si_cor
+
+# externalizing at follow-up
+cor.test(graph_net_corr$T3_ysr_internalizing_sum, graph_net_corr$T3_ysr_externalizing_sum)
+externalizing_cor <-
+  graph_net_corr %>%
+  ggplot(
+    aes(
+      x = T3_ysr_externalizing_sum, 
+      y = T3_ysr_internalizing_sum
+      )
+    ) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  theme_classic() +
+  labs(
+    x = "Concurrent Externalizing Severity"
+  ) +
+  labeltheme
+externalizing_cor
+
+# degree of Temporal agranular insular parahippocampal gyrus (L) (tempanginsPhG_L_117.deg)
+cor.test(graph_net_corr$T3_ysr_internalizing_sum, graph_net_corr$tempanginsPhG_L_117.deg)
+tempanginsPhG_L_117.deg_cor <-
+  graph_net_corr %>%
+  ggplot(
+    aes(
+      x = tempanginsPhG_L_117.deg, 
+      y = T3_ysr_internalizing_sum
+      )
+    ) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  theme_classic() +
+  labs(
+    x = "Temporal agranular insular PhG (R) - degree" 
+  ) +
+  labeltheme
+tempanginsPhG_L_117.deg_cor
+
+# degree of subgenual cingulate cortex (R) (sgCG_R_188.deg)
+cor.test(graph_net_corr$T3_ysr_internalizing_sum, graph_net_corr$sgCG_R_188.deg)
+sgCG_R_188.deg_cor <-
+  graph_net_corr %>%
+  ggplot(
+    aes(
+      x = sgCG_R_188.deg, 
+      y = T3_ysr_internalizing_sum
+      )
+    ) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  theme_classic() +
+  labs(
+    x = "Subgenual Cingulate Cortex (R) - degree" 
+  ) +
+  labeltheme
+sgCG_R_188.deg_cor
+
+# deigenvector centrality of the rostral STG (R) (rostSTG_R_80.eig_cent)
+cor.test(graph_net_corr$T3_ysr_internalizing_sum, graph_net_corr$rostSTG_R_80.eig_cent)
+rostSTG_R_80.eig_cent_cor <-
+  graph_net_corr %>%
+  ggplot(
+    aes(
+      x = rostSTG_R_80.eig_cent, 
+      y = T3_ysr_internalizing_sum
+      )
+    ) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  theme_classic() +
+  labs(
+    x = "Rostral STG (R) - eigenvector centrality" 
+  ) +
+  labeltheme
+rostSTG_R_80.eig_cent_cor
+
+# degree of the rostral STG (R) (rostSTG_R_79.deg)
+cor.test(graph_net_corr$T3_ysr_internalizing_sum, graph_net_corr$rostSTG_L_79.deg)
+rostSTG_L_79.deg_cor <-
+  graph_net_corr %>%
+  ggplot(
+    aes(
+      x = rostSTG_L_79.deg, 
+      y = T3_ysr_internalizing_sum
+      )
+    ) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  theme_classic() +
+  labs(
+    x = "Rostral STG (L) - degree" 
+  ) +
+  labeltheme
+rostSTG_L_79.deg_cor
+
+# within module degree of the ventral ITG (R) (intvITG_R_90.wm_z)
+cor.test(graph_net_corr$T3_ysr_internalizing_sum, graph_net_corr$intvITG_R_90.wm_z)
+intvITG_R_90.wm_z_cor <-
+  graph_net_corr %>%
+  ggplot(
+    aes(
+      x = intvITG_R_90.wm_z, 
+      y = T3_ysr_internalizing_sum
+      )
+    ) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  theme_classic() +
+  labs(
+    x = "Ventral ITG (R) - within module degree" 
+  ) +
+  labeltheme
+intvITG_R_90.wm_z_cor
+
+# participation coeff of the caudal mvOccC (rostcunMVocC_R_192.pc)
+cor.test(graph_net_corr$T3_ysr_internalizing_sum, graph_net_corr$rostcunMVocC_R_192.pc)
+rostcunMVocC_R_192.pc_cor <-
+  graph_net_corr %>%
+  ggplot(
+    aes(
+      x = rostcunMVocC_R_192.pc, 
+      y = T3_ysr_internalizing_sum
+      )
+    ) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  theme_classic() +
+  labs(
+    x = "Caudal Medioventral Occipital Cortex - participation coefficient" 
+  ) +
+  labeltheme
+rostcunMVocC_R_192.pc_cor
+
+# within mod degree of the Occipital polar cortex (R) (ocpcLOcC_R_204.wm_z)
+cor.test(graph_net_corr$T3_ysr_internalizing_sum, graph_net_corr$ocpcLOcC_R_204.wm_z)
+ocpcLOcC_R_204.wm_z_cor <-
+  graph_net_corr %>%
+  ggplot(
+    aes(
+      x = ocpcLOcC_R_204.wm_z, 
+      y = T3_ysr_internalizing_sum
+      )
+    ) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  theme_classic() +
+  labs(
+    x = "Occipital Polar Cortex (R) - within module degree" 
+  ) +
+  labeltheme
+ocpcLOcC_R_204.wm_z_cor
+
+brain_plus_all_ysr <-
+  cowplot::plot_grid(
+    si_cor, 
+    externalizing_cor, 
+    tempanginsPhG_L_117.deg_cor, 
+    sgCG_R_188.deg_cor,
+    rostSTG_R_80.eig_cent_cor, 
+    intvITG_R_90.wm_z_cor, 
+    rostcunMVocC_R_192.pc_cor, 
+    ocpcLOcC_R_204.wm_z_cor,
+    label_size = 10,
+    ncol = 2
+    )
+ggsave("brain_+_all_ysr_cors.png", brain_plus_all_ysr, width = 7, height = 7)
+```
+
+-------------------------------------------------------------------------
+# Only Psychological and Environmental factors 
+T1_ysr_internalizing_sum, T1_ysr_externalizing_sum, T3_ysr_internalizing_sum, T3_ysr_externalizing_sum,  
+Parent_Education.T1, BMI.T1, sumsev_type_t1, sss_t1, sex_child, Age_at_T3Bx, Age_at_T1 interval,  
+tanner_average.T3, tanner_average.T1
+glimpse(graph_net_stand_siq_brain)
+
+```{r}
+graph_net_select_onlyPsych <-
+  graph_net_stand_siq_brain %>%
+  dplyr::select(
+    -ends_with(".eff_loc"), 
+    -ends_with(".deg"), 
+   -ends_with(".eig_cent"),
+    -ends_with("pc"), 
+    -ends_with(".wm_z"), 
+    -meanFD,
+    -meanGS,
+    -sleepy,
+   -fmap_applied
+    )
+```
+
+```{r}
+#as.matrix
+predictors_ysr_scaled_nonbrain <- data.matrix(graph_net_select_onlyPsych[2:17]) # columns 2 - 17 are predictors
+ysr_scaled_nonbrain <- graph_net_select_onlyPsych$T3_ysr_internalizing_sum_z # my response variable
+save(predictors_ysr_scaled_nonbrain, file = "predictors_scaled_nonbrain_ysr.rda")
+save(ysr_scaled_nonbrain, file = "ysr_scaled_nonbrain.rda")
+```
+
+## to get sense of coefficient path
+```{r}
+lasso_ysr_nonbrain <- glmnet(predictors_ysr_scaled_nonbrain, ysr_scaled_nonbrain, family = "gaussian", alpha = 1, standardize = FALSE)
+# 
+plot(lasso_ysr_nonbrain, xvar = "dev", label = TRUE)
+```
+# nested cv
+```{r}
+n <- 106
+
+## Your procedure
+
+cvfit <- cv.glmnet(predictors_ysr_scaled_nonbrain, ysr_scaled_nonbrain, standardize = FALSE, alpha = 1, nfolds = n)
+betas <- coef(cvfit, s = "lambda.min")
+
+# computing rsquared of unnested cv
+# supp_siq_scaled is my y
+X <- model.matrix(T3_ysr_internalizing_sum_z ~ ., data = graph_net_select_onlyPsych)[,-1]
+# predict
+y_hat <- predict(cvfit,  newx = X,  s = "lambda.min")
+# R-Squared
+r_sq <- 1 - (sum((ysr_scaled_nonbrain - y_hat)^2) / sum((ysr_scaled_nonbrain - mean(ysr_scaled_nonbrain))^2))
+r_sq # 0.6080656 standardized prior to glmnet
+cvfit$lambda.min # 0.04044414
+
+## Get measure of performance of procedure
+preds <- double(n)
+ybars <- double(n)
+for(i in 1:n){
+    cvfit.inner <- cv.glmnet(predictors_ysr_scaled_nonbrain[-i,], ysr_scaled_nonbrain[-i], standardize = FALSE, nfolds = n-1, grouped=FALSE, alpha=1)
+    preds[i] <- predict(cvfit.inner, newx = predictors_ysr_scaled_nonbrain[i,,drop=FALSE], s = "lambda.min")
+    ybars[i] <- mean(ysr_scaled_nonbrain[-i])
+    cat(i)
+}
+
+# total SS
+mse0 <- mean((ysr_scaled_nonbrain-ybars)^2) # 1.009524
+# mean square error
+mse <- mean((ysr_scaled_nonbrain-preds)^2) # 0.4549446
+
+R2 <-1- mse/mse0 # 0.5493473
+```
+
+# zero-order correlatoins
+
+```{r}
+graph_net_corr_onlypsych <- 
+  graph_net_select_brain %>%
+    dplyr::select(
+    -ends_with(".eff_loc"), 
+    -ends_with(".deg"), 
+   -ends_with(".eig_cent"),
+    -ends_with("pc"), 
+    -ends_with(".wm_z"), 
+    -meanFD,
+    -meanGS,
+    -sleepy,
+   -fmap_applied,
+   -siq_total.T3) %>%
+  # converting race/ethinicity to factor and binarizing for analysis
+  mutate(
+    KSADS_Child_Race_by_P.T1 = factor(KSADS_Child_Race_by_P.T1),
+    KSADS_Child_Race_by_P.T1_bin = ifelse(KSADS_Child_Race_by_P.T1 == "1", "1", "0"),
+    # 1 = white, 0 = poc
+    # converting sex and sleepiness to factor
+    sex_child = factor(sex_child),
+    sex_child = ifelse(sex_child == "2", "1", "0")
+    ) %>%
+  dplyr::select(-KSADS_Child_Race_by_P.T1) %>%
+  dplyr::select(ELS_ID, T3_ysr_internalizing_sum, siq_total_log, everything())
+graph_net_corr_onlypsych <-
+  graph_net_corr_onlypsych %>%
+  mutate_at(vars(KSADS_Child_Race_by_P.T1_bin, sex_child), factor) 
+contrasts(graph_net_corr_onlypsych$KSADS_Child_Race_by_P.T1_bin) = contr.treatment(2)
+contrasts(graph_net_corr_onlypsych$sex_child) = contr.treatment(2)
+```
+
+```{r}
+labeltheme <- theme(axis.title.y = element_blank(),
+                    text = element_text(size = 7))
+# concurrent internalizing severity
+cor.test(graph_net_corr_onlypsych$siq_total_log, graph_net_corr_onlypsych$T3_ysr_internalizing_sum)
+si_t3_cor <-
+  graph_net_corr_onlypsych %>%
+  ggplot(
+    aes(
+      x = siq_total_log, 
+      y = T3_ysr_internalizing_sum
+      )
+    ) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  theme_classic() +
+  labs(
+    x = "Concurrent Suicidal Ideation Severity"
+  ) +
+  labeltheme
+si_t3_cor
+
+# concurrent externalizing severity
+cor.test(graph_net_corr_onlypsych$T3_ysr_internalizing_sum, graph_net_corr_onlypsych$T3_ysr_externalizing_sum)
+extern_t3_cor <-
+  graph_net_corr_onlypsych %>%
+  ggplot(
+    aes(
+      x = T3_ysr_externalizing_sum, 
+      y = T3_ysr_internalizing_sum
+      )
+    ) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  theme_classic() +
+  labs(
+    x = "Concurrent Externalizing Severity"
+  ) +
+  labeltheme
+extern_t3_cor
+
+# internalizing at baseline
+cor.test(graph_net_corr_onlypsych$T3_ysr_internalizing_sum, graph_net_corr_onlypsych$T1_ysr_internalizing_sum)
+intern_t1_cor <-
+  graph_net_corr_onlypsych %>%
+  ggplot(
+    aes(
+      x = T1_ysr_internalizing_sum, 
+      y = T3_ysr_internalizing_sum
+      )
+    ) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  theme_classic() +
+  labs(
+    x = "Baseline Internalizing Severity"
+  ) +
+  labeltheme
+intern_t1_cor
+
+# sex
+summary(lm(scale(T3_ysr_internalizing_sum) ~ sex_child, data = graph_net_corr_onlypsych))
+sex_cor <-
+  graph_net_corr_onlypsych %>%
+  ggplot(
+    aes(
+      x = sex_child, 
+      y = T3_ysr_internalizing_sum
+      )
+    ) +
+  geom_boxplot() +
+  theme_classic() +
+  labs(
+    x = "Sex"
+    ) +
+  labeltheme
+sex_cor
+
+
+# interval
+cor.test(graph_net_corr_onlypsych$T3_ysr_internalizing_sum, graph_net_corr_onlypsych$interval)
+interval_cor <-
+  graph_net_corr_onlypsych %>%
+  ggplot(
+    aes(
+      x = interval, 
+      y = T3_ysr_internalizing_sum
+      )
+    ) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  theme_classic() +
+  labs(
+    x = "Interval between baseline and follow-up"
+  ) +
+  labeltheme
+interval_cor
+
+# tanner  at follow up
+cor.test(graph_net_corr_onlypsych$T3_ysr_internalizing_sum, graph_net_corr_onlypsych$tanner_average.T3)
+tannert3_cor <-
+  graph_net_corr_onlypsych %>%
+  ggplot(
+    aes(
+      x = tanner_average.T3, 
+      y = T3_ysr_internalizing_sum
+      )
+    ) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  theme_classic() +
+  labs(
+    x = "Concurrent Tanner Stage"
+  ) +
+  labeltheme
+tannert3_cor
+
+# race  
+summary(lm(scale(T3_ysr_internalizing_sum) ~ KSADS_Child_Race_by_P.T1_bin, data = graph_net_corr_onlypsych))
+race_cor <-
+  graph_net_corr_onlypsych %>%
+  ggplot(
+    aes(
+      x = KSADS_Child_Race_by_P.T1_bin, 
+      y = T3_ysr_internalizing_sum
+      )
+    ) +
+  geom_boxplot() +
+  theme_classic() +
+  labs(
+    x = "Race/Ethnicity"
+  ) +
+  labeltheme
+race_cor
+
+# age  
+cor.test(graph_net_corr_onlypsych$T3_ysr_internalizing_sum, graph_net_corr_onlypsych$Age_at_T1)
+Age_at_T1_cor <-
+  graph_net_corr_onlypsych %>%
+  ggplot(
+    aes(
+      x = Age_at_T1, 
+      y = T3_ysr_internalizing_sum
+      )
+    ) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  theme_classic() +
+  labs(
+    x = "Age at baseline"
+  ) +
+  labeltheme
+Age_at_T1_cor
+
+
+
+nonbrain_ysr <-
+  cowplot::plot_grid(
+    si_t3_cor,
+    extern_t3_cor,
+    intern_t1_cor,
+    tannert3_cor,
+    sex_cor,
+    interval_cor,
+    race_cor,
+    Age_at_T1_cor,
+    label_size = 10,
+    ncol = 3
+    )
+ggsave("nonbrain_cors_ysr.png", nonbrain_ysr)
+```
+
+
+-------------------------------------------------------------------------
+
+
+# Only Brain and brain related factors (global signal, meanfd, sleepiness)
+
+## de-selecting variables
+```{r}
+graph_net_stand_siq_onlybrain <- graph_net_stand_siq_brain %>%
+  dplyr::select(
+    T3_ysr_internalizing_sum_z,
+    ends_with(".eff_loc"), 
+    ends_with(".deg"), 
+    ends_with(".eig_cent"),
+    ends_with("pc"), 
+    ends_with(".wm_z"), 
+    meanFD,
+    meanGS,
+    sleepy,
+    fmap_applied
+    ) %>%
+  mutate(
+    sleepy = factor(sleepy),
+    fmap_applied = factor(fmap_applied)
+  )
+```
+
+
+#### constructing x matrix and y vector
+```{r}
+#as.matrix
+predictors_scaled_ysr_onlybrain <- data.matrix(graph_net_stand_siq_onlybrain[2:1255]) # columns 2 - 1255 are predictors
+response_ysr <-graph_net_stand_siq_onlybrain$T3_ysr_internalizing_sum_z # my response variable
+save(predictors_scaled_ysr_onlybrain, file = "predictors_scaled_ysr_onlybrain.rda")
+save(response_ysr, file = "response_ysr.rda")
+```
+
+## to get sense of coefficient path
+```{r}
+lasso_onlybrain <- glmnet(predictors_scaled_ysr_onlybrain, response_ysr, family = "gaussian", alpha = 1, standardize = FALSE)
+# 
+plot(lasso_onlybrain, xvar = "dev", label = TRUE)
+```
+
+```{r}
+n <- 106
+
+## Your procedure
+
+cvfit <- cv.glmnet(predictors_scaled_ysr_onlybrain, response_ysr, standardize = FALSE, alpha = 1, nfolds = n)
+betas <- coef(cvfit, s = "lambda.min")
+# computing rsquared of unnested cv
+# supp_siq_scaled is my y
+X <- model.matrix(T3_ysr_internalizing_sum_z ~ ., data = graph_net_stand_siq_onlybrain)[,-1]
+# predict
+y_hat <- predict(cvfit,  newx = X,  s = "lambda.min")
+# R-Squared
+r_sq <- 1 - (sum((response_ysr - y_hat)^2) / sum((response_ysr - mean(response_ysr))^2))
+r_sq # 0.4295407 standardized prior to glmnet
+cvfit$lambda.min # 0.1617792
+
+
+## Get measure of performance of procedure
+preds <- double(n)
+ybars <- double(n)
+for(i in 1:n){
+    cvfit.inner <- cv.glmnet(predictors_scaled_ysr_onlybrain[-i,], response_ysr[-i], standardize = FALSE, nfolds = n-1, grouped=FALSE, alpha=1)
+    preds[i] <- predict(cvfit.inner, newx = predictors_scaled_ysr_onlybrain[i,,drop=FALSE], s = "lambda.min")
+    ybars[i] <- mean(response_ysr[-i])
+    cat(i)
+}
+
+mse0 <- mean((response_ysr-ybars)^2) # 1.009524
+mse <- mean((response_ysr-preds)^2) # 1.140252
+
+R2 <-1- mse/mse0 #-0.1294951
+```
+
+# zero order correlations
+```{r}
+graph_net_corr_onlybrain <- 
+  graph_net_select_brain %>%
+  # converting race/ethinicity to factor and binarizing for analysis
+  dplyr::select(
+    ELS_ID,
+    T3_ysr_internalizing_sum,
+    ends_with(".eff_loc"), 
+    ends_with(".deg"), 
+    ends_with(".eig_cent"),
+    ends_with("pc"), 
+    ends_with(".wm_z"), 
+    meanFD,
+    meanGS,
+    sleepy,
+    fmap_applied
+    ) %>%
+  mutate(
+    sleepy = factor(sleepy),
+    fmap_applied = factor(fmap_applied)
+    ) %>%
+  dplyr::select(ELS_ID, T3_ysr_internalizing_sum, everything())
+graph_net_corr_onlybrain <-
+  graph_net_corr_onlybrain %>%
+  mutate_at(vars(sleepy, fmap_applied), factor)
+contrasts(graph_net_corr_onlybrain$sleepy) = contr.treatment(2)
+contrasts(graph_net_corr_onlybrain$fmap_applied) = contr.treatment(2)
+```
+
+```{r}
+labeltheme <- theme(axis.title.y = element_blank(),
+                    text = element_text(size = 7))
+# within mod degree of theIntermediate ventral inferior temporal gyrus (R) (intvITG_R_90.wm_z)
+cor.test(graph_net_corr_onlybrain$T3_ysr_internalizing_sum, graph_net_corr_onlybrain$intvITG_R_90.wm_z)
+intvITG_R_90.wm_z_cor <-
+  graph_net_corr_onlybrain %>%
+  ggplot(
+    aes(
+      x = intvITG_R_90.wm_z, 
+      y = T3_ysr_internalizing_sum
+      )
+    ) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  theme_classic() +
+  labs(
+    x = "Ventral ITG (R) - within-module degree"
+  ) + 
+  labeltheme
+intvITG_R_90.wm_z_cor
+
+# eig cent of the  rostral STG (R) (rostSTG_R_80.eig_cent)
+cor.test(graph_net_corr_onlybrain$T3_ysr_internalizing_sum, graph_net_corr_onlybrain$rostSTG_R_80.eig_cent)
+rostSTG_R_80.eig_cent_cor <-
+  graph_net_corr_onlybrain %>%
+  ggplot(
+    aes(
+      x = rostSTG_R_80.eig_cent, 
+      y = T3_ysr_internalizing_sum
+      )
+    ) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  theme_classic() +
+  labs(
+    x = "rostral STG (R) - eigenvector centrality"
+  ) + 
+  labeltheme
+rostSTG_R_80.eig_cent_cor 
+
+#participation coeff of the intermediate ventral inferior temporal gyrus (vlITG_R_98.pc )
+cor.test(graph_net_corr_onlybrain$T3_ysr_internalizing_sum, graph_net_corr_onlybrain$vlITG_R_98.pc)
+vlITG_R_98.pc_cor <-
+  graph_net_corr_onlybrain %>%
+  ggplot(
+    aes(
+      x = vlITG_R_98.pc, 
+      y = T3_ysr_internalizing_sum
+      )
+    ) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  theme_classic() +
+  labs(
+    x = "Ventral ITG (R) - participation coefficient"
+  ) + 
+  labeltheme 
+vlITG_R_98.pc_cor
+
+# within module degree of the occipital polar cortex (R) (ocpcLOcC_R_204.wm_z)
+cor.test(graph_net_corr_onlybrain$T3_ysr_internalizing_sum, graph_net_corr_onlybrain$ocpcLOcC_R_204.wm_z)
+ocpcLOcC_R_204.wm_z_cor <-
+  graph_net_corr_onlybrain %>%
+  ggplot(
+    aes(
+      x = ocpcLOcC_R_204.wm_z, 
+      y = T3_ysr_internalizing_sum
+      )
+    ) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  theme_classic() +
+  labs(
+    x = "Occipital Polar Cortex (R) - within module degree"
+  ) + 
+  labeltheme 
+ocpcLOcC_R_204.wm_z_cor
+
+# degree of the sgACC (R) (sgCG_R_188.deg )
+cor.test(graph_net_corr_onlybrain$T3_ysr_internalizing_sum, graph_net_corr_onlybrain$sgCG_R_188.deg)
+sgCG_R_188.deg_cor <-
+  graph_net_corr_onlybrain %>%
+  ggplot(
+    aes(
+      x = sgCG_R_188.deg, 
+      y = T3_ysr_internalizing_sum
+      )
+    ) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  theme_classic() +
+  labs(
+    x = "Subgenual Cingulate Cortex (R) - degree"
+  ) + 
+  labeltheme
+sgCG_R_188.deg_cor
+
+
+# local efficiency of the substantia nigra (L) (SN_L_225.eff_loc)
+cor.test(graph_net_corr_onlybrain$T3_ysr_internalizing_sum, graph_net_corr_onlybrain$SN_L_225.eff_loc)
+SN_L_225.eff_loc_cor <-
+  graph_net_corr_onlybrain %>%
+  ggplot(
+    aes(
+      x = SN_L_225.eff_loc, 
+      y = T3_ysr_internalizing_sum
+      )
+    ) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  theme_classic() +
+  labs(
+    x = "Substantia Nigra (L) - local efficiency"
+  ) + 
+  labeltheme
+SN_L_225.eff_loc_cor
+
+# Participation coeff of the medial precuneus (medPcun_L_149.pc )
+cor.test(graph_net_corr_onlybrain$T3_ysr_internalizing_sum, graph_net_corr_onlybrain$medPcun_L_149.pc)
+medPcun_L_149.pc_cor <-
+  graph_net_corr_onlybrain %>%
+  ggplot(
+    aes(
+      x = medPcun_L_149.pc, 
+      y = T3_ysr_internalizing_sum
+      )
+    ) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  theme_classic() +
+  labs(
+    x = "Medial Precuneus (L) - participation coefficient"
+  ) + 
+  labeltheme 
+medPcun_L_149.pc_cor
+
+# local efficiency of the right medial OrG (medSTG_R_70.eff_loc)
+cor.test(graph_net_corr_onlybrain$T3_ysr_internalizing_sum, graph_net_corr_onlybrain$medSTG_R_70.eff_loc)
+medSTG_R_70.eff_loc_cor <-
+  graph_net_corr_onlybrain %>%
+  ggplot(
+    aes(
+      x = medSTG_R_70.eff_loc, 
+      y = T3_ysr_internalizing_sum
+      )
+    ) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  theme_classic() +
+  labs(
+    x = "Medial STG (R) - local efficiency"
+  ) + 
+  labeltheme 
+medSTG_R_70.eff_loc_cor
+
+# participation coeff of the medial PhG (medPhG_L_119.pc)
+cor.test(graph_net_corr_onlybrain$T3_ysr_internalizing_sum, graph_net_corr_onlybrain$medPhG_L_119.pc)
+medPhG_L_119.pc_cor <-
+  graph_net_corr_onlybrain %>%
+  ggplot(
+    aes(
+      x = medPhG_L_119.pc, 
+      y = T3_ysr_internalizing_sum
+      )
+    ) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  theme_classic() +
+  labs(
+    x = "Medial PhG (R) - participation coefficient"
+  ) + 
+  labeltheme 
+medPhG_L_119.pc_cor
+
+
+# degree of the Temporal agranular insular parahippocampal gyrus (L) (tempanginsPhG_L_117.deg)
+cor.test(graph_net_corr_onlybrain$T3_ysr_internalizing_sum, graph_net_corr_onlybrain$tempanginsPhG_L_117.deg)
+tempanginsPhG_L_117.deg_cor <-
+  graph_net_corr_onlybrain %>%
+  ggplot(
+    aes(
+      x = tempanginsPhG_L_117.deg, 
+      y = T3_ysr_internalizing_sum
+      )
+    ) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  theme_classic() +
+  labs(
+    x = "Temporal agranular insular parahippocampal gyrus (L) - degree"
+  ) + 
+  labeltheme
+tempanginsPhG_L_117.deg_cor
+
+# local efficiency of the  occipital polar cortex (R) (ocpcLOcC_R_204.eff_loc)
+cor.test(graph_net_corr_onlybrain$T3_ysr_internalizing_sum, graph_net_corr_onlybrain$ocpcLOcC_R_204.eff_loc)
+ocpcLOcC_R_204.eff_loc_cor <-
+  graph_net_corr_onlybrain %>%
+  ggplot(
+    aes(
+      x = ocpcLOcC_R_204.eff_loc, 
+      y = T3_ysr_internalizing_sum
+      )
+    ) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  theme_classic() +
+  labs(
+    x = "Occipital Polar Cortex (R) - local efficiency"
+  ) + 
+  labeltheme
+ocpcLOcC_R_204.eff_loc_cor 
+
+# Within mod degree of the temporal agranular insular PhG (R) (tempanginsPhG_R_118.wm_z)
+cor.test(graph_net_corr_onlybrain$T3_ysr_internalizing_sum, graph_net_corr_onlybrain$tempanginsPhG_R_118.wm_z)
+tempanginsPhG_R_118.wm_z_cor <-
+  graph_net_corr_onlybrain %>%
+  ggplot(
+    aes(
+      x = tempanginsPhG_R_118.wm_z, 
+      y = T3_ysr_internalizing_sum
+      )
+    ) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  theme_classic() +
+  labs(
+    x = "Temporal agranular insular PhG (R) - within module degree"
+  ) + 
+  labeltheme 
+tempanginsPhG_R_118.wm_z_cor
+
+# degree of the rostral superior temporal gyrus (L) (rostSTG_L_79.deg)
+cor.test(graph_net_corr_onlybrain$T3_ysr_internalizing_sum, graph_net_corr_onlybrain$rostSTG_L_79.deg)
+rostSTG_L_79.deg_cor <-
+  graph_net_corr_onlybrain %>%
+  ggplot(
+    aes(
+      x = rostSTG_L_79.deg, 
+      y = T3_ysr_internalizing_sum
+      )
+    ) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  theme_classic() +
+  labs(
+    x = "Rostral STG (L) - degree"
+  ) + 
+  labeltheme 
+rostSTG_L_79.deg_cor
+
+# within mod degree of the  medial superior frontal gyrus (R) (medSFG_R_14.wm_z)
+cor.test(graph_net_corr_onlybrain$T3_ysr_internalizing_sum, graph_net_corr_onlybrain$medSFG_R_14.wm_z)
+medSFG_R_14.wm_z_cor <-
+  graph_net_corr_onlybrain %>%
+  ggplot(
+    aes(
+      x = medSFG_R_14.wm_z, 
+      y = T3_ysr_internalizing_sum
+      )
+    ) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  theme_classic() +
+  labs(
+    x = "Medial SFG (R) - within-module degree"
+  ) + 
+  labeltheme
+medSFG_R_14.wm_z_cor 
+
+# degree of the temporal agranular insular PhG (L) (tempanginsPhG_L_117.wm_z)
+cor.test(graph_net_corr_onlybrain$T3_ysr_internalizing_sum, graph_net_corr_onlybrain$tempanginsPhG_L_117.wm_z)
+tempanginsPhG_L_117.wm_z_cor <-
+  graph_net_corr_onlybrain %>%
+  ggplot(
+    aes(
+      x = tempanginsPhG_L_117.wm_z, 
+      y = T3_ysr_internalizing_sum
+      )
+    ) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  theme_classic() +
+  labs(
+    x = "Temporal agranular insular PhG (L) - within module degree"
+  ) + 
+  labeltheme 
+tempanginsPhG_L_117.wm_z_cor
+
+# local efficiency of theleft medial OrG (medOrG_R_48.eig_cent)
+cor.test(graph_net_corr_onlybrain$T3_ysr_internalizing_sum, graph_net_corr_onlybrain$medOrG_R_48.eig_cent)
+medOrG_R_48.eig_cent_cor <-
+  graph_net_corr_onlybrain %>%
+  ggplot(
+    aes(
+      x = medOrG_R_48.eig_cent, 
+      y = T3_ysr_internalizing_sum
+      )
+    ) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  theme_classic() +
+  labs(
+    x = "Medial orbital frontal gyrus (R) - eigenvector centrality"
+  ) + 
+  labeltheme 
+medOrG_R_48.eig_cent_cor
+
+# eigenvector centrality of the right lateral middle occiptial gyrus (mocgLOcC_R_200.eff_loc)
+cor.test(graph_net_corr_onlybrain$T3_ysr_internalizing_sum, graph_net_corr_onlybrain$mocgLOcC_R_200.eff_loc)
+mocgLOcC_R_200.eff_loc_cor <-
+  graph_net_corr_onlybrain %>%
+  ggplot(
+    aes(
+      x = mocgLOcC_R_200.eff_loc, 
+      y = T3_ysr_internalizing_sum
+      )
+    ) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  theme_classic() +
+  labs(
+    x = "Lateral Middle Occiptial Gyrus (R) - local efficiency"
+  ) + 
+  labeltheme 
+mocgLOcC_R_200.eff_loc_cor
+
+# within mod degree of the lateral ventral FuG (R) (latventFuG_R_108.wm_z )
+cor.test(graph_net_corr_onlybrain$T3_ysr_internalizing_sum, graph_net_corr_onlybrain$latventFuG_R_108.wm_z)
+latventFuG_R_108.wm_z_cor <-
+  graph_net_corr_onlybrain %>%
+  ggplot(
+    aes(
+      x = latventFuG_R_108.wm_z, 
+      y = T3_ysr_internalizing_sum
+      )
+    ) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  theme_classic() +
+  labs(
+    x = "Lateral ventral FuG (R) - within module degree"
+  ) + 
+  labeltheme
+latventFuG_R_108.wm_z_cor 
+
+
+# degree of the right substantia nigra (R)
+cor.test(graph_net_corr_onlybrain$T3_ysr_internalizing_sum, graph_net_corr_onlybrain$SN_R_226.deg)
+SN_R_226.deg_cor <-
+  graph_net_corr_onlybrain %>%
+  ggplot(
+    aes(
+      x = SN_R_226.deg , 
+      y = T3_ysr_internalizing_sum
+      )
+    ) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  theme_classic() +
+  labs(
+    x = "Substantia Nigra (R) - degree"
+  ) + 
+  labeltheme 
+SN_R_226.deg_cor
+
+# degree of the Rostroventral inferior parietal lobe (R) (rostventIPL_R_144.deg)
+cor.test(graph_net_corr_onlybrain$T3_ysr_internalizing_sum, graph_net_corr_onlybrain$rostventIPL_R_144.deg)
+rostventIPL_R_144.deg_cor <-
+  graph_net_corr_onlybrain %>%
+  ggplot(
+    aes(
+      x = rostventIPL_R_144.deg, 
+      y = T3_ysr_internalizing_sum
+      )
+    ) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  theme_classic() +
+  labs(
+    x = "Rostroventral inferior parietal lobe (R)  - degree"
+  ) + 
+  labeltheme 
+rostventIPL_R_144.deg_cor
+
+
+# participation coeff of the Medio ventral rostral lingual gyrus (L) (rostlingMVocC_L_195.pc)
+cor.test(graph_net_corr_onlybrain$T3_ysr_internalizing_sum, graph_net_corr_onlybrain$rostlingMVocC_L_195.pc)
+rostlingMVocC_L_195.pc_cor <-
+  graph_net_corr_onlybrain %>%
+  ggplot(
+    aes(
+      x = rostlingMVocC_L_195.pc, 
+      y = T3_ysr_internalizing_sum
+      )
+    ) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  theme_classic() +
+  labs(
+    x = "Medio ventral rostral lingual gyrus (L) - participation coefficient"
+  ) + 
+  labeltheme 
+rostlingMVocC_L_195.pc_cor
+
+# participation coeff of the Rostral superior parietal lobe (R) (rostSPL_R_126.pc)
+cor.test(graph_net_corr_onlybrain$T3_ysr_internalizing_sum, graph_net_corr_onlybrain$rostSPL_R_126.pc)
+rostSPL_R_126.pc_cor <-
+  graph_net_stand_siq_brain %>%
+  ggplot(
+    aes(
+      x = rostSPL_R_126.pc, 
+      y = T3_ysr_internalizing_sum_z
+      )
+    ) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  theme_classic() +
+  labs(
+    x = "Rostral superior parietal lobe (R) - participation coefficient"
+  ) + 
+  labeltheme 
+rostSPL_R_126.pc_cor
+
+brain <-
+  cowplot::plot_grid(
+    intvITG_R_90.wm_z_cor,    
+    rostSTG_R_80.eig_cent_cor, 
+    vlITG_R_98.pc_cor,
+    ocpcLOcC_R_204.eff_loc_cor,
+    sgCG_R_188.deg_cor,
+    SN_L_225.eff_loc_cor,
+    medPcun_L_149.pc_cor,
+    medSTG_R_70.eff_loc_cor,   
+    medPhG_L_119.pc_cor,    
+    tempanginsPhG_L_117.deg_cor,
+    ocpcLOcC_R_204.wm_z_cor,
+    tempanginsPhG_R_118.wm_z_cor,
+    rostSTG_L_79.deg_cor,
+    medSFG_R_14.wm_z_cor,    
+    tempanginsPhG_L_117.wm_z_cor,    
+    medOrG_R_48.eig_cent_cor,
+    mocgLOcC_R_200.eff_loc_cor,
+    latventFuG_R_108.wm_z_cor,
+    SN_R_226.deg_cor,
+    rostventIPL_R_144.deg_cor,
+    rostlingMVocC_L_195.pc_cor,
+    rostSPL_R_126.pc_cor,
+    label_size = 10,
+    ncol = 3
+    )
+ggsave("brain_cors_ysr.png", brain, width = 7, height = 10)
+```
+

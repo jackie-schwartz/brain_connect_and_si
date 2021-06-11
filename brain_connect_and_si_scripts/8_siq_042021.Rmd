@@ -1,7 +1,7 @@
 ---
 title: "siq"
 author: "Jackie"
-date: "10/29/2020"
+date: "04/19/21"
 output: html_notebook
 ---
 
@@ -20,15 +20,11 @@ library(Rcpp)
 library(httpuv)
 library(corrr)
 library(seriation)
-#library(d3heatmap)
 library(heatmaply)
 library(corrplot)
 library(haven)
 library(naniar)
-library(brms)
-library(rstan)
 library(bayesplot)
-library(rstanarm)
 library(knitr)
 library(loo)
 library(nonnest2)
@@ -36,8 +32,8 @@ library(nonnest2)
 
 # filepaths
 ```{r, echo=FALSE, message=FALSE}
-siq_t3_fp <- "~/Box/Mooddata_Coordinating/1_Lab_Coordinating/Users/JackieSchwartz/PHIND_RS_and_Suicide/Octo2020Analysis/siq.T3.csv" # pulled my directory 10.29.20
-graph_fp <- "~/Box/Mooddata_Coordinating/1_Lab_Coordinating/Users/JackieSchwartz/PHIND_RS_and_Suicide/Octo2020Analysis/graph_all.csv"
+siq_t3_fp <- "~/Box/mooddata_nophi/ELS_RDoC/T3 DATA/ELS T3 Questionnaires/T3 Child Questionnaires/T3S1 Questionnaires/siq.T3.csv" 
+graph_fp <- "~/Box/Mooddata_Coordinating/1_Lab_Coordinating/Users/JackieSchwartz/PHIND_RS_and_Suicide/April2021Analysis/fmaps_and_nofmaps/graph_all.csv"
 ```
 
 # reading in files
@@ -52,29 +48,24 @@ graph <- read_csv(graph_fp) %>%
 # score siq data
 
 ### filtering out duplicated IDs 
-_I'm using the .5/.2 sessions bc they are closest to the scan date_
+_I'm using the non .5/.2 sessions for most bc their siq is closest to other bx measures_
 ```{r}
 siq_t3_dup <- siq_t3 %>%
   filter(duplicated(ELS_ID)
          ) # duplicated IDs
 dupIDs <- siq_t3_dup$ELS_ID
 
-siq_t3_clean <- siq_t3 %>%
-  mutate(reassessed =
-           ifelse(is.na(Session_Type),
-                  "no",
-                  "yes"
-           )
+ELSIDdup_choosena <- c(3,22,35,53,68,91,98,188,196,206)
+ELSIDdup_choosescandate <- c(25,36) # bc dates closest to ysr date
+siq_t3_clean <-
+  siq_t3 %>%
+  mutate(
+    drop = ifelse(ELS_ID %in% ELSIDdup_choosena & !is.na(Session_Type), "drop", "keep"),
+    drop = ifelse(ELS_ID %in% ELSIDdup_choosescandate & is.na(Session_Type), "drop", drop)
   )
-
 siq_t3_clean_unique <-
   siq_t3_clean %>%
-  mutate(
-    dup = ifelse(ELS_ID %in% dupIDs, "dup", "0"),
-    drop = ifelse(reassessed == "yes" & dup == "dup", "drop", "0")
-  ) %>%
-  filter(drop == "0")
-
+  filter(drop == "keep")
 ```
 
 ## recoding 999s and 888s
@@ -86,7 +77,7 @@ siq_t3_clean_unique <-
   replace_with_na_at(.,
                      .vars = vars,
                      condition = ~.x == 999) %>%
-  dplyr::select(-reassessed, -dup, -drop)
+  dplyr::select(-drop)
 
 ```
 
@@ -98,17 +89,13 @@ siq_t3_clean_total <-
     siq_total.T3 = 
       rowSums(siq_t3_clean_unique[,(which(names(siq_t3_clean_unique)=='siq_1.T3'):which(names(siq_t3_clean_unique)=='siq_15.T3'))])
   ) %>%
-  drop_na(siq_total.T3) %>%
+  # drop_na(siq_total.T3) %>% keeping the NAs
   mutate(ELS_ID = factor(ELS_ID))
-
-
-# rowSums(df[,which(names(df) == 'siq_1.T3'):which(names(df)=='siq_15.T3')])
-
 ```
 
 
 ```{r}
-siq_t3_clean_total_fp <- "~/Box/Mooddata_Coordinating/1_Lab_Coordinating/Users/JackieSchwartz/PHIND_RS_and_Suicide/Octo2020Analysis/siq_t3_response.csv"
+siq_t3_clean_total_fp <- "~/Box/Mooddata_Coordinating/1_Lab_Coordinating/Users/JackieSchwartz/PHIND_RS_and_Suicide/April2021Analysis/fmaps_and_nofmaps/siq_t3_response.csv"
 write_csv(siq_t3_clean_total, siq_t3_clean_total_fp)
 ```
 
